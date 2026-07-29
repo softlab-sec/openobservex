@@ -6,6 +6,7 @@ from sqlalchemy import text
 import app.models  # noqa: F401  (ensures models register on Base.metadata)
 from app.api.ai import router as ai_router
 from app.api.alerts import router as alerts_router
+from app.api.infra import router as infra_router
 from app.api.auth import router as auth_router
 from app.api.telemetry import router as telemetry_router
 from app.db.clickhouse import ch_query
@@ -38,6 +39,7 @@ app.include_router(telemetry_router)
 app.include_router(auth_router)
 app.include_router(ai_router)
 app.include_router(alerts_router)
+app.include_router(infra_router)
 
 
 @app.get("/", tags=["system"])

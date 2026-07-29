@@ -1,11 +1,10 @@
 # ============================================================
 # OpenTelemetry Collector - OpenObserveX ingestion front door
-# Receives OTLP (logs, metrics, traces) and writes to ClickHouse.
+# Receives OTLP (logs, metrics, traces) AND scrapes infra
+# metrics (node-exporter, cAdvisor), writing all to ClickHouse.
 # ============================================================
 
 receivers:
-  # OTLP is the standard OpenTelemetry wire protocol.
-  # Apps send telemetry here over gRPC (4317) or HTTP (4318).
   otlp:
     protocols:
       grpc:
@@ -13,16 +12,26 @@ receivers:
       http:
         endpoint: 0.0.0.0:4318
 
+  # Scrapes Prometheus-format infra metrics on a fixed interval.
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: node-exporter
+          scrape_interval: 15s
+          static_configs:
+            - targets: [node-exporter:9100]
+        - job_name: cadvisor
+          scrape_interval: 15s
+          static_configs:
+            - targets: [cadvisor:8080]
+
 processors:
-  # Protects this small VM: caps how much memory the collector
-  # may use and pushes back before it can OOM the host.
   memory_limiter:
     check_interval: 1s
     limit_mib: 512
     spike_limit_mib: 128
 
 extensions:
-  # Exposes an HTTP endpoint (port 13133) we can curl to confirm liveness.
   health_check:
     endpoint: 0.0.0.0:13133
 
@@ -32,14 +41,12 @@ exporters:
     username: ${env:CLICKHOUSE_USER}
     password: ${env:CLICKHOUSE_PASSWORD}
     database: ${env:CLICKHOUSE_DB}
-    # On first run the exporter auto-creates its tables in ClickHouse.
     create_schema: true
     ttl: 72h
     logs_table_name: otel_logs
     traces_table_name: otel_traces
+    metrics_table_name: otel_metrics
     timeout: 10s
-    # Batching now lives inside the exporter (per current OTel guidance),
-    # NOT as a separate 'batch' processor.
     sending_queue:
       enabled: true
       num_consumers: 10
@@ -60,7 +67,7 @@ service:
       processors: [memory_limiter]
       exporters: [clickhouse]
     metrics:
-      receivers: [otlp]
+      receivers: [otlp, prometheus]
       processors: [memory_limiter]
       exporters: [clickhouse]
     logs:

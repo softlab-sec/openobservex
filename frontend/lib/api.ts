@@ -290,3 +290,12 @@ export type ServiceDetail = {
   upstream: { service: string; calls: number }[];
   downstream: { service: string; calls: number; errors: number }[];
 };
+
+export type InfraSummary = {
+  cpu_busy_pct: number;
+  memory_used_pct: number;
+  disk_used_pct: number;
+  memory_total_gb: number;
+  disk_total_gb: number;
+};
+export type ContainerStat = { container: string; mem_mb: number };

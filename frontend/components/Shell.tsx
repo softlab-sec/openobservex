@@ -16,6 +16,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/traces", label: "Traces", icon: "M4 6h16M4 12h10M4 18h7" },
       { href: "/map", label: "Service Map", icon: "M5 6a2 2 0 100-4 2 2 0 000 4zM19 22a2 2 0 100-4 2 2 0 000 4zM5 6c0 8 14 4 14 12" },
       { href: "/logs", label: "Logs", icon: "M4 4h16v4H4zM4 12h16M4 16h16M4 20h10" },
+      { href: "/infra", label: "Infrastructure", icon: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z" },
     ],
   },
   {
