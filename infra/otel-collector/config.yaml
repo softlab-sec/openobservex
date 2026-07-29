@@ -1,0 +1,69 @@
+# ============================================================
+# OpenTelemetry Collector - OpenObserveX ingestion front door
+# Receives OTLP (logs, metrics, traces) and writes to ClickHouse.
+# ============================================================
+
+receivers:
+  # OTLP is the standard OpenTelemetry wire protocol.
+  # Apps send telemetry here over gRPC (4317) or HTTP (4318).
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # Protects this small VM: caps how much memory the collector
+  # may use and pushes back before it can OOM the host.
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+    spike_limit_mib: 128
+
+extensions:
+  # Exposes an HTTP endpoint (port 13133) we can curl to confirm liveness.
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+exporters:
+  clickhouse:
+    endpoint: tcp://clickhouse:9000?dial_timeout=10s
+    username: ${env:CLICKHOUSE_USER}
+    password: ${env:CLICKHOUSE_PASSWORD}
+    database: ${env:CLICKHOUSE_DB}
+    # On first run the exporter auto-creates its tables in ClickHouse.
+    create_schema: true
+    ttl: 72h
+    logs_table_name: otel_logs
+    traces_table_name: otel_traces
+    timeout: 10s
+    # Batching now lives inside the exporter (per current OTel guidance),
+    # NOT as a separate 'batch' processor.
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      batch:
+        flush_timeout: 5s
+        min_size: 5000
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter]
+      exporters: [clickhouse]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter]
+      exporters: [clickhouse]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter]
+      exporters: [clickhouse]
