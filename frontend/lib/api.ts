@@ -292,10 +292,18 @@ export type ServiceDetail = {
 };
 
 export type InfraSummary = {
-  cpu_busy_pct: number;
-  memory_used_pct: number;
-  disk_used_pct: number;
+  cpu_pct: number;
+  memory_pct: number;
+  disk_pct: number;
   memory_total_gb: number;
   disk_total_gb: number;
+  load1: number;
+  load5: number;
+  load15: number;
 };
 export type ContainerStat = { container: string; mem_mb: number };
+
+export type InfraPoint = { bucket: string; memory_pct: number; load1: number };
+export type NetPoint = { bucket: string; rx_bps: number; tx_bps: number };
+export type FsRow = { mount: string; size_gb: number; used_pct: number };
+export type InfraAi = { verdict: "healthy" | "watch" | "critical"; headline: string; details: string[] };
