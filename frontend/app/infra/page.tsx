@@ -3,18 +3,19 @@
 import { useCallback, useState } from "react";
 import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend,
-  Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
+  Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import Shell, { usePoll } from "@/components/Shell";
 import { Card, RangePicker, Stat, colorFor } from "@/components/ui";
 import {
-  apiGet, type FsRow, type InfraAi, type InfraPoint,
-  type InfraSummary, type NetPoint,
+  apiGet, type CpuCore, type DiskPoint, type FsRow, type InfraAi,
+  type InfraPoint, type InfraSummary, type MemBreakdown, type NetPoint,
 } from "@/lib/api";
 
 const axis = { stroke: "#ffffff40", fontSize: 11 };
 const tip = { background: "#111827", border: "1px solid #ffffff20", borderRadius: 8, fontSize: 12 };
 const hhmm = (b: string) => b.slice(11, 16);
+const MEM_COLORS = ["#38bdf8", "#a78bfa", "#fbbf24", "#334155"];
 
 function tone(pct: number): "good" | "danger" | "default" {
   if (pct >= 85) return "danger";
@@ -26,6 +27,7 @@ function fmtBps(v: number): string {
   if (v >= 1e3) return `${(v / 1e3).toFixed(1)} KB/s`;
   return `${v} B/s`;
 }
+const bpsTick = (v: number) => (v >= 1e6 ? `${(v / 1e6).toFixed(0)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}K` : `${v}`);
 
 export default function InfraPage() {
   const [minutes, setMinutes] = useState(30);
@@ -33,6 +35,9 @@ export default function InfraPage() {
   const [ts, setTs] = useState<InfraPoint[]>([]);
   const [net, setNet] = useState<NetPoint[]>([]);
   const [fs, setFs] = useState<FsRow[]>([]);
+  const [cores, setCores] = useState<CpuCore[]>([]);
+  const [mem, setMem] = useState<MemBreakdown | null>(null);
+  const [disk, setDisk] = useState<DiskPoint[]>([]);
   const [err, setErr] = useState<string | null>(null);
 
   const [ai, setAi] = useState<InfraAi | null>(null);
@@ -44,9 +49,13 @@ export default function InfraPage() {
       apiGet<{ points: InfraPoint[] }>(`/api/v1/infra/timeseries?minutes=${minutes}`),
       apiGet<{ points: NetPoint[] }>(`/api/v1/infra/network?minutes=${minutes}`),
       apiGet<{ filesystems: FsRow[] }>(`/api/v1/infra/filesystems?minutes=10`),
+      apiGet<{ cores: CpuCore[] }>(`/api/v1/infra/cpu-cores?minutes=10`),
+      apiGet<MemBreakdown>(`/api/v1/infra/memory-breakdown?minutes=10`),
+      apiGet<{ points: DiskPoint[] }>(`/api/v1/infra/disk-io?minutes=${minutes}`),
     ])
-      .then(([s, t, n, f]) => {
-        setSum(s); setTs(t.points); setNet(n.points); setFs(f.filesystems); setErr(null);
+      .then(([s, t, n, f, c, m, d]) => {
+        setSum(s); setTs(t.points); setNet(n.points); setFs(f.filesystems);
+        setCores(c.cores); setMem(m); setDisk(d.points); setErr(null);
       })
       .catch((e: Error) => setErr(e.message));
   }, [minutes]);
@@ -56,9 +65,7 @@ export default function InfraPage() {
   function runAi() {
     setAiLoading(true); setAi(null);
     apiGet<InfraAi>(`/api/v1/infra/ai-summary?minutes=10`)
-      .then(setAi)
-      .catch((e: Error) => setErr(e.message))
-      .finally(() => setAiLoading(false));
+      .then(setAi).catch((e: Error) => setErr(e.message)).finally(() => setAiLoading(false));
   }
 
   const verdictColor = ai
@@ -145,22 +152,65 @@ export default function InfraPage() {
       </div>
 
       <div className="mb-6 grid gap-3 lg:grid-cols-2">
+        <Card title="Per-core CPU busy %">
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={cores}>
+              <CartesianGrid stroke="#ffffff10" vertical={false} />
+              <XAxis dataKey="core" {...axis} tickLine={false} tickFormatter={(c) => `core ${c}`} />
+              <YAxis domain={[0, 100]} {...axis} tickLine={false} width={32} unit="%" />
+              <Tooltip contentStyle={tip} formatter={(v: number) => [`${v}%`, "busy"]} labelFormatter={(c) => `Core ${c}`} />
+              <Bar dataKey="busy_pct" radius={[4, 4, 0, 0]}>
+                {cores.map((c) => <Cell key={c.core} fill={c.busy_pct >= 85 ? "#f87171" : c.busy_pct >= 70 ? "#fbbf24" : "#34d399"} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>
+
+        <Card title="Memory breakdown">
+          <div className="flex items-center">
+            <ResponsiveContainer width="60%" height={220}>
+              <PieChart>
+                <Pie data={mem?.breakdown ?? []} dataKey="gb" nameKey="name" innerRadius={50} outerRadius={85} paddingAngle={2}>
+                  {(mem?.breakdown ?? []).map((_, i) => <Cell key={i} fill={MEM_COLORS[i % MEM_COLORS.length]} />)}
+                </Pie>
+                <Tooltip contentStyle={tip} formatter={(v: number, n) => [`${v} GB`, n]} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="flex-1 space-y-2 pl-2 text-sm">
+              {(mem?.breakdown ?? []).map((m, i) => (
+                <div key={m.name} className="flex items-center justify-between">
+                  <span className="flex items-center gap-2 text-white/70">
+                    <span className="h-2.5 w-2.5 rounded-sm" style={{ background: MEM_COLORS[i % MEM_COLORS.length] }} />
+                    {m.name}
+                  </span>
+                  <span className="tabular-nums text-white/90">{m.gb} GB</span>
+                </div>
+              ))}
+              {mem && (
+                <div className="mt-2 border-t border-white/10 pt-2 text-xs text-white/50">
+                  Swap: {mem.swap_used_gb} / {mem.swap_total_gb} GB
+                </div>
+              )}
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      <div className="mb-6 grid gap-3 lg:grid-cols-2">
         <Card title="Network throughput (bytes/sec)">
           <ResponsiveContainer width="100%" height={220}>
             <AreaChart data={net}>
               <defs>
                 <linearGradient id="rxg" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#34d399" stopOpacity={0.4} />
-                  <stop offset="100%" stopColor="#34d399" stopOpacity={0} />
+                  <stop offset="0%" stopColor="#34d399" stopOpacity={0.4} /><stop offset="100%" stopColor="#34d399" stopOpacity={0} />
                 </linearGradient>
                 <linearGradient id="txg" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#fbbf24" stopOpacity={0.4} />
-                  <stop offset="100%" stopColor="#fbbf24" stopOpacity={0} />
+                  <stop offset="0%" stopColor="#fbbf24" stopOpacity={0.4} /><stop offset="100%" stopColor="#fbbf24" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid stroke="#ffffff10" />
               <XAxis dataKey="bucket" tickFormatter={hhmm} {...axis} tickLine={false} minTickGap={40} />
-              <YAxis {...axis} tickLine={false} width={48} tickFormatter={(v) => v >= 1e6 ? `${(v/1e6).toFixed(0)}M` : v >= 1e3 ? `${(v/1e3).toFixed(0)}K` : v} />
+              <YAxis {...axis} tickLine={false} width={48} tickFormatter={bpsTick} />
               <Tooltip contentStyle={tip} labelFormatter={hhmm} formatter={(v: number) => fmtBps(v)} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               <Area type="monotone" dataKey="rx_bps" stroke="#34d399" strokeWidth={2} fill="url(#rxg)" name="RX" />
@@ -169,8 +219,32 @@ export default function InfraPage() {
           </ResponsiveContainer>
         </Card>
 
-        <Card title="Filesystems">
+        <Card title="Disk I/O (bytes/sec)">
           <ResponsiveContainer width="100%" height={220}>
+            <AreaChart data={disk}>
+              <defs>
+                <linearGradient id="rdg" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#60a5fa" stopOpacity={0.4} /><stop offset="100%" stopColor="#60a5fa" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="wrg" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#f472b6" stopOpacity={0.4} /><stop offset="100%" stopColor="#f472b6" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid stroke="#ffffff10" />
+              <XAxis dataKey="bucket" tickFormatter={hhmm} {...axis} tickLine={false} minTickGap={40} />
+              <YAxis {...axis} tickLine={false} width={48} tickFormatter={bpsTick} />
+              <Tooltip contentStyle={tip} labelFormatter={hhmm} formatter={(v: number) => fmtBps(v)} />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Area type="monotone" dataKey="read_bps" stroke="#60a5fa" strokeWidth={2} fill="url(#rdg)" name="Read" />
+              <Area type="monotone" dataKey="write_bps" stroke="#f472b6" strokeWidth={2} fill="url(#wrg)" name="Write" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </Card>
+      </div>
+
+      <div className="mb-6 grid gap-3 lg:grid-cols-2">
+        <Card title="Filesystems">
+          <ResponsiveContainer width="100%" height={200}>
             <BarChart data={fs} layout="vertical" margin={{ left: 30 }}>
               <CartesianGrid stroke="#ffffff10" horizontal={false} />
               <XAxis type="number" domain={[0, 100]} {...axis} tickLine={false} unit="%" />
@@ -182,12 +256,17 @@ export default function InfraPage() {
             </BarChart>
           </ResponsiveContainer>
         </Card>
-      </div>
 
-      <div className="grid grid-cols-3 gap-3">
-        <Stat label="Load 1m" value={sum?.load1 ?? "-"} tone="default" />
-        <Stat label="Load 5m" value={sum?.load5 ?? "-"} tone="default" />
-        <Stat label="Load 15m" value={sum?.load15 ?? "-"} tone="default" />
+        <Card title="Load average">
+          <div className="grid h-full grid-cols-3 items-center gap-3">
+            {[["1m", sum?.load1], ["5m", sum?.load5], ["15m", sum?.load15]].map(([label, v]) => (
+              <div key={label as string} className="rounded-lg border border-white/10 bg-white/[0.02] p-4 text-center">
+                <div className="text-[10px] uppercase tracking-wider text-white/40">Load {label}</div>
+                <div className="mt-1 text-2xl font-semibold tabular-nums">{v ?? "-"}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
       </div>
     </Shell>
   );

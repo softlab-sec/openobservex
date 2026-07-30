@@ -241,3 +241,88 @@ async def infra_ai_summary(minutes: int = Query(10, ge=1, le=1440)):
     )
     result = await run_in_ai_pool(generate_json, prompt, system, schema)
     return result
+
+
+@router.get("/cpu-cores")
+def infra_cpu_cores(minutes: int = Query(10, ge=1, le=1440)):
+    """Per-core busy % over the window."""
+    rows = _rows(
+        ch_query(
+            """
+            WITH per AS (
+                SELECT Attributes['cpu'] AS core, Attributes['mode'] AS mode,
+                       max(Value) - min(Value) AS delta
+                FROM otel_metrics_sum
+                WHERE MetricName='node_cpu_seconds_total'
+                  AND TimeUnix >= now() - INTERVAL {mins:UInt32} MINUTE
+                GROUP BY core, mode
+            )
+            SELECT core,
+                   round((1 - sumIf(delta, mode='idle') / greatest(sum(delta),1)) * 100, 1) AS busy_pct
+            FROM per GROUP BY core ORDER BY core
+            """,
+            {"mins": minutes},
+        )
+    )
+    return {"cores": rows}
+
+
+@router.get("/memory-breakdown")
+def infra_memory_breakdown(minutes: int = Query(10, ge=1, le=1440)):
+    """Latest memory split: used / cached / buffers / free (GB)."""
+    def g(metric: str) -> float:
+        return _scalar(
+            ch_query(
+                """
+                SELECT argMax(Value, TimeUnix) FROM otel_metrics_gauge
+                WHERE MetricName = {m:String}
+                  AND TimeUnix >= now() - INTERVAL {mins:UInt32} MINUTE
+                """,
+                {"m": metric, "mins": minutes},
+            )
+        )
+    total = g("node_memory_MemTotal_bytes")
+    free = g("node_memory_MemFree_bytes")
+    cached = g("node_memory_Cached_bytes")
+    buffers = g("node_memory_Buffers_bytes")
+    used = max(total - free - cached - buffers, 0)
+    swap_total = g("node_memory_SwapTotal_bytes")
+    swap_free = g("node_memory_SwapFree_bytes")
+    to_gb = lambda v: round(v / 1e9, 2)
+    return {
+        "breakdown": [
+            {"name": "Used", "gb": to_gb(used)},
+            {"name": "Cached", "gb": to_gb(cached)},
+            {"name": "Buffers", "gb": to_gb(buffers)},
+            {"name": "Free", "gb": to_gb(free)},
+        ],
+        "swap_used_gb": to_gb(max(swap_total - swap_free, 0)),
+        "swap_total_gb": to_gb(swap_total),
+    }
+
+
+@router.get("/disk-io")
+def infra_disk_io(minutes: int = Query(30, ge=1, le=1440)):
+    """Disk read/write throughput (bytes/sec) over time."""
+    def series(metric: str, key: str):
+        return _rows(
+            ch_query(
+                f"""
+                SELECT bucket, round(greatest(max(Value)-min(Value),0)/60, 0) AS {key}
+                FROM (
+                    SELECT toStartOfMinute(TimeUnix) AS bucket, Value
+                    FROM otel_metrics_sum
+                    WHERE MetricName='{metric}'
+                      AND TimeUnix >= now() - INTERVAL {{mins:UInt32}} MINUTE
+                )
+                GROUP BY bucket ORDER BY bucket
+                """,
+                {"mins": minutes},
+            )
+        )
+    reads = series("node_disk_read_bytes_total", "read_bps")
+    writes = series("node_disk_written_bytes_total", "write_bps")
+    wmap = {r["bucket"]: r["write_bps"] for r in writes}
+    for r in reads:
+        r["write_bps"] = wmap.get(r["bucket"], 0)
+    return {"points": reads}

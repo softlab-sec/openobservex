@@ -42,7 +42,7 @@ RCA_SCHEMA = {
         "verdict": {"type": "string", "enum": ["healthy", "degraded", "failed"]},
         "probable_cause": {"type": "string"},
         "confidence": {"type": "string", "enum": ["low", "medium", "high"]},
-        "impact": {"type": "string"},
+        "impact": {"type": "string", "enum": ["none", "low", "medium", "high"]},
         "evidence": {"type": "array", "items": {"type": "string"}},
         "remediation": {"type": "array", "items": {"type": "string"}},
     },

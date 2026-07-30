@@ -307,3 +307,8 @@ export type InfraPoint = { bucket: string; memory_pct: number; load1: number };
 export type NetPoint = { bucket: string; rx_bps: number; tx_bps: number };
 export type FsRow = { mount: string; size_gb: number; used_pct: number };
 export type InfraAi = { verdict: "healthy" | "watch" | "critical"; headline: string; details: string[] };
+
+export type CpuCore = { core: string; busy_pct: number };
+export type MemSlice = { name: string; gb: number };
+export type MemBreakdown = { breakdown: MemSlice[]; swap_used_gb: number; swap_total_gb: number };
+export type DiskPoint = { bucket: string; read_bps: number; write_bps: number };
