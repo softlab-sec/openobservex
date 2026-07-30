@@ -126,7 +126,8 @@ services:
     container_name: oox-workload
     restart: unless-stopped
     environment:
-      OTLP_ENDPOINT: http://otel-collector:4317
+      OTLP_ENDPOINT: http://ingest-gateway:8100
+      OOX_API_KEY: oox_761d2610_mWvio3Y3LAKe8CsgNv1SBnZhbdYgtrM85EbajjXe_CI
       ERROR_RATE: "0.08"
       MIN_INTERVAL: "0.4"
       MAX_INTERVAL: "1.6"
@@ -134,6 +135,21 @@ services:
       - oox
     depends_on:
       - otel-collector
+
+  ingest-gateway:
+    build: ./gateway
+    environment:
+      COLLECTOR_HTTP: http://otel-collector:4318
+      PG_DSN: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    ports:
+      - "8100:8100"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    networks:
+      - oox
 
   ollama:
     image: ollama/ollama:latest
