@@ -281,6 +281,7 @@ def stats_error_patterns(
     clauses = [
         "upper(SeverityText) = 'ERROR'",
         "Timestamp >= now() - INTERVAL {mins:UInt32} MINUTE",
+        "{tenant_scope}",
     ]
     params: dict = {"mins": minutes, "lim": limit}
     if service:
