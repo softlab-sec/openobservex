@@ -65,11 +65,19 @@ def stats_overview(
         FROM otel_traces
         WHERE {where}
     """
+    import math
+
     data = _rows(ch_query_scoped(query, params))
-    if data and data[0].get("requests") is not None:
-        return data[0]
-    return {"requests": 0, "errors": 0, "error_rate": 0,
-            "p50_ms": 0, "p95_ms": 0, "p99_ms": 0, "traces": 0}
+    row = data[0] if data else {}
+    # zero rows (e.g. tenant owns nothing) -> quantiles come back NaN, which is
+    # not JSON-serialisable. Normalise the whole row to clean numbers.
+    if not row or not row.get("requests"):
+        return {"requests": 0, "errors": 0, "error_rate": 0,
+                "p50_ms": 0, "p95_ms": 0, "p99_ms": 0, "traces": 0}
+    for k, v in row.items():
+        if isinstance(v, float) and math.isnan(v):
+            row[k] = 0
+    return row
 
 
 @router.get("/stats/timeseries")
