@@ -312,3 +312,11 @@ export type CpuCore = { core: string; busy_pct: number };
 export type MemSlice = { name: string; gb: number };
 export type MemBreakdown = { breakdown: MemSlice[]; swap_used_gb: number; swap_total_gb: number };
 export type DiskPoint = { bucket: string; read_bps: number; write_bps: number };
+
+export type Application = {
+  id: string;
+  name: string;
+  tenant_tag: string;
+  namespace: string;
+  created_at: string;
+};

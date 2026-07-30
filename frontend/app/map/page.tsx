@@ -19,6 +19,7 @@ import {
   type MapEdge,
   type ServiceDetail,
   type ServiceMap,
+  type Application,
 } from "@/lib/api";
 
 type NodeData = {
@@ -247,7 +248,7 @@ function Empty({ children }: { children: React.ReactNode }) {
 export default function ServiceMapPage() {
   const [minutes, setMinutes] = useState(60);
   const [app, setApp] = useState("all");
-  const [apps, setApps] = useState<string[]>([]);
+  const [apps, setApps] = useState<Application[]>([]);
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [empty, setEmpty] = useState(false);
@@ -271,11 +272,12 @@ export default function ServiceMapPage() {
   );
 
   const load = useCallback(() => {
-    apiGet<{ applications: string[] }>("/api/v1/applications")
-      .then((d) => setApps(d.applications))
+    apiGet<Application[]>("/api/v1/applications")
+      .then(setApps)
       .catch(() => {});
 
-    return apiGet<ServiceMap>(`/api/v1/stats/service-map?minutes=${minutes}`)
+    const appQ = app !== "all" ? `&app=${encodeURIComponent(app)}` : "";
+    return apiGet<ServiceMap>(`/api/v1/stats/service-map?minutes=${minutes}${appQ}`)
       .then((data) => {
         setErr(null);
         if (!data.nodes.length) {
@@ -337,9 +339,9 @@ export default function ServiceMapPage() {
         setEdges(re);
       })
       .catch((e: Error) => setErr(e.message));
-  }, [minutes, openService]);
+  }, [minutes, app, openService]);
 
-  usePoll(load, [minutes], 15000);
+  usePoll(load, [minutes, app], 15000);
 
   const flow = useMemo(
     () => (
@@ -375,10 +377,10 @@ export default function ServiceMapPage() {
             onChange={(e) => setApp(e.target.value)}
             className="rounded-lg border border-white/10 bg-black/30 px-3 py-1.5 text-sm outline-none focus:border-white/40"
           >
-            <option value="all">All services</option>
+            <option value="all">All applications</option>
             {apps.map((a) => (
-              <option key={a} value={a}>
-                {a}
+              <option key={a.id} value={a.namespace}>
+                {a.name}
               </option>
             ))}
           </select>

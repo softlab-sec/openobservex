@@ -232,7 +232,10 @@ def stats_error_share(
 
 
 @router.get("/stats/service-map")
-def stats_service_map(minutes: int = Query(60, ge=1, le=10080)):
+def stats_service_map(
+    minutes: int = Query(60, ge=1, le=10080),
+    app: Optional[str] = Query(None, description="service.namespace to scope to"),
+):
     """Directed service dependency edges derived from parent/child spans."""
     query = """
         SELECT
@@ -252,7 +255,7 @@ def stats_service_map(minutes: int = Query(60, ge=1, le=10080)):
         ORDER BY calls DESC
         LIMIT 100
     """
-    edges = _rows(ch_query_scoped(query, {"mins": minutes}))
+    edges = _rows(ch_query_scoped(query, {"mins": minutes}, app_namespace=app))
     nodes = sorted({e["source"] for e in edges} | {e["target"] for e in edges})
     return {"nodes": nodes, "edges": edges}
 
