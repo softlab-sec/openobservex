@@ -6,12 +6,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.api.auth import get_current_user
 
-from app.db.clickhouse import ch_query
+from app.db.clickhouse import ch_query, ch_query_scoped
+from app.api.applications import tenant_dependency
 
 router = APIRouter(
     prefix="/api/v1",
     tags=["telemetry"],
-    dependencies=[Depends(get_current_user)],
+    dependencies=[Depends(get_current_user), Depends(tenant_dependency)],
 )
 
 
@@ -36,6 +37,7 @@ def _trace_filters(
         params["svc"] = service
     if errors_only:
         clauses.append("StatusCode = 'Error'")
+    clauses.append("{tenant_scope}")
     return " AND ".join(clauses), params
 
 
@@ -63,8 +65,11 @@ def stats_overview(
         FROM otel_traces
         WHERE {where}
     """
-    data = _rows(ch_query(query, params))
-    return data[0] if data else {}
+    data = _rows(ch_query_scoped(query, params))
+    if data and data[0].get("requests") is not None:
+        return data[0]
+    return {"requests": 0, "errors": 0, "error_rate": 0,
+            "p50_ms": 0, "p95_ms": 0, "p99_ms": 0, "traces": 0}
 
 
 @router.get("/stats/timeseries")
@@ -87,7 +92,7 @@ def stats_timeseries(
         GROUP BY bucket
         ORDER BY bucket ASC
     """
-    return {"points": _rows(ch_query(query, params))}
+    return {"points": _rows(ch_query_scoped(query, params))}
 
 
 @router.get("/stats/services")
@@ -109,7 +114,7 @@ def stats_services(
         GROUP BY ServiceName
         ORDER BY spans DESC
     """
-    return {"services": _rows(ch_query(query, params))}
+    return {"services": _rows(ch_query_scoped(query, params))}
 
 
 @router.get("/stats/endpoints")
@@ -137,7 +142,7 @@ def stats_endpoints(
         ORDER BY requests DESC
         LIMIT {{lim:UInt32}}
     """
-    return {"endpoints": _rows(ch_query(query, params))}
+    return {"endpoints": _rows(ch_query_scoped(query, params))}
 
 
 @router.get("/stats/latency-samples")
@@ -162,7 +167,7 @@ def stats_latency_samples(
         ORDER BY Timestamp DESC
         LIMIT {{lim:UInt32}}
     """
-    return {"samples": _rows(ch_query(query, params))}
+    return {"samples": _rows(ch_query_scoped(query, params))}
 
 
 @router.get("/stats/latency-distribution")
@@ -198,7 +203,7 @@ def stats_latency_distribution(
         GROUP BY bucket, sortOrder
         ORDER BY sortOrder ASC
     """
-    return {"buckets": _rows(ch_query(query, params))}
+    return {"buckets": _rows(ch_query_scoped(query, params))}
 
 
 @router.get("/stats/error-share")
@@ -210,11 +215,12 @@ def stats_error_share(
         SELECT ServiceName AS service, countIf(StatusCode = 'Error') AS errors
         FROM otel_traces
         WHERE Timestamp >= now() - INTERVAL {mins:UInt32} MINUTE
+          AND {tenant_scope}
         GROUP BY service
         HAVING errors > 0
         ORDER BY errors DESC
     """
-    return {"share": _rows(ch_query(query, {"mins": minutes}))}
+    return {"share": _rows(ch_query_scoped(query, {"mins": minutes}))}
 
 
 @router.get("/stats/service-map")
@@ -232,12 +238,13 @@ def stats_service_map(minutes: int = Query(60, ge=1, le=10080)):
           ON c.ParentSpanId = p.SpanId AND c.TraceId = p.TraceId
         WHERE c.ParentSpanId != ''
           AND c.Timestamp >= now() - INTERVAL {mins:UInt32} MINUTE
+          AND {tenant_scope}
         GROUP BY source, target
         HAVING source != target
         ORDER BY calls DESC
         LIMIT 100
     """
-    edges = _rows(ch_query(query, {"mins": minutes}))
+    edges = _rows(ch_query_scoped(query, {"mins": minutes}))
     nodes = sorted({e["source"] for e in edges} | {e["target"] for e in edges})
     return {"nodes": nodes, "edges": edges}
 
@@ -269,7 +276,7 @@ def stats_error_patterns(
         ORDER BY occurrences DESC
         LIMIT {{lim:UInt32}}
     """
-    return {"patterns": _rows(ch_query(query, params))}
+    return {"patterns": _rows(ch_query_scoped(query, params))}
 
 
 # --------------------------------------------------------------------------
@@ -311,7 +318,7 @@ def list_traces(
         ) AS c ON r.TraceId = c.TraceId
         ORDER BY Timestamp DESC
     """
-    items = _rows(ch_query(query, params))
+    items = _rows(ch_query_scoped(query, params))
     return {"count": len(items), "items": items}
 
 
@@ -320,7 +327,7 @@ def get_trace(trace_id: str):
     if not trace_id.isalnum() or len(trace_id) > 64:
         raise HTTPException(status_code=400, detail="Invalid trace id")
     query = """
-        WITH (SELECT min(Timestamp) FROM otel_traces WHERE TraceId = {tid:String}) AS t0
+        WITH (SELECT min(Timestamp) FROM otel_traces WHERE TraceId = {tid:String} AND {tenant_scope}) AS t0
         SELECT
             SpanId, ParentSpanId, ServiceName, SpanName, SpanKind,
             StatusCode, StatusMessage,
@@ -328,10 +335,10 @@ def get_trace(trace_id: str):
             round(dateDiff('microsecond', t0, Timestamp) / 1000, 3)  AS offset_ms,
             SpanAttributes
         FROM otel_traces
-        WHERE TraceId = {tid:String}
+        WHERE TraceId = {tid:String} AND {tenant_scope}
         ORDER BY Timestamp ASC
     """
-    spans = _rows(ch_query(query, {"tid": trace_id}))
+    spans = _rows(ch_query_scoped(query, {"tid": trace_id}))
     if not spans:
         raise HTTPException(status_code=404, detail="Trace not found")
     total = max((s["offset_ms"] + s["duration_ms"]) for s in spans)
@@ -343,11 +350,12 @@ def list_spans(
     limit: int = Query(50, ge=1, le=1000),
     service: Optional[str] = Query(None),
 ):
-    where = ""
+    clauses = ["{tenant_scope}"]
     params: dict = {"lim": limit}
     if service:
-        where = "WHERE ServiceName = {svc:String}"
+        clauses.append("ServiceName = {svc:String}")
         params["svc"] = service
+    where = "WHERE " + " AND ".join(clauses)
     query = f"""
         SELECT Timestamp, TraceId, SpanId, ParentSpanId,
                ServiceName, SpanName, Duration, StatusCode
@@ -356,7 +364,7 @@ def list_spans(
         ORDER BY Timestamp DESC
         LIMIT {{lim:UInt32}}
     """
-    items = _rows(ch_query(query, params))
+    items = _rows(ch_query_scoped(query, params))
     return {"count": len(items), "items": items}
 
 
@@ -373,7 +381,7 @@ def list_logs(
     severity: Optional[str] = Query(None, description="Comma separated, e.g. ERROR,WARN"),
     search: Optional[str] = Query(None, description="Case-insensitive text match on body"),
 ):
-    filters = ["Timestamp >= now() - INTERVAL {mins:UInt32} MINUTE"]
+    filters = ["Timestamp >= now() - INTERVAL {mins:UInt32} MINUTE", "{tenant_scope}"]
     params: dict = {"mins": minutes, "lim": limit}
     if service:
         filters.append("ServiceName = {svc:String}")
@@ -394,7 +402,7 @@ def list_logs(
         ORDER BY Timestamp DESC
         LIMIT {{lim:UInt32}}
     """
-    items = _rows(ch_query(query, params))
+    items = _rows(ch_query_scoped(query, params))
     return {"count": len(items), "items": items}
 
 
@@ -403,7 +411,7 @@ def log_severities(
     minutes: int = Query(60, ge=1, le=10080),
     service: Optional[str] = Query(None),
 ):
-    clauses = ["Timestamp >= now() - INTERVAL {mins:UInt32} MINUTE"]
+    clauses = ["Timestamp >= now() - INTERVAL {mins:UInt32} MINUTE", "{tenant_scope}"]
     params: dict = {"mins": minutes}
     if service:
         clauses.append("ServiceName = {svc:String}")
@@ -415,43 +423,25 @@ def log_severities(
         GROUP BY severity
         ORDER BY count DESC
     """
-    return {"severities": _rows(ch_query(query, params))}
+    return {"severities": _rows(ch_query_scoped(query, params))}
 
 
 @router.get("/services")
 def list_services():
     query = """
         SELECT DISTINCT ServiceName FROM (
-            SELECT ServiceName FROM otel_logs
+            SELECT ServiceName FROM otel_logs WHERE {tenant_scope}
             UNION DISTINCT
-            SELECT ServiceName FROM otel_traces
+            SELECT ServiceName FROM otel_traces WHERE {tenant_scope}
         )
         ORDER BY ServiceName
     """
-    return {"services": [row[0] for row in ch_query(query).result_rows]}
+    return {"services": [row[0] for row in ch_query_scoped(query).result_rows]}
 
 
 # --------------------------------------------------------------------------
 # Service drill-down + application grouping (service map support)
 # --------------------------------------------------------------------------
-
-
-@router.get("/applications")
-def list_applications():
-    """Distinct applications (OTel service.namespace) that have sent telemetry.
-
-    Empty until real apps tag their telemetry; the simulator sends none, so
-    the UI shows a single "All services" option today.
-    """
-    query = """
-        SELECT DISTINCT ResourceAttributes['service.namespace'] AS app
-        FROM otel_traces
-        WHERE Timestamp >= now() - INTERVAL 1440 MINUTE
-          AND ResourceAttributes['service.namespace'] != ''
-        ORDER BY app
-    """
-    apps = [row[0] for row in ch_query(query).result_rows]
-    return {"applications": apps}
 
 
 @router.get("/stats/service-detail")
@@ -461,7 +451,7 @@ def stats_service_detail(
 ):
     """Everything the drill-down panel needs for one service."""
     totals = _rows(
-        ch_query(
+        ch_query_scoped(
             """
             SELECT count() AS spans,
                    countIf(StatusCode = 'Error') AS errors,
@@ -472,12 +462,13 @@ def stats_service_detail(
             FROM otel_traces
             WHERE ServiceName = {svc:String}
               AND Timestamp >= now() - INTERVAL {mins:UInt32} MINUTE
+              AND {tenant_scope}
             """,
             {"svc": service, "mins": minutes},
         )
     )
     operations = _rows(
-        ch_query(
+        ch_query_scoped(
             """
             SELECT SpanName AS operation, count() AS calls,
                    countIf(StatusCode = 'Error') AS errors,
@@ -485,13 +476,14 @@ def stats_service_detail(
             FROM otel_traces
             WHERE ServiceName = {svc:String}
               AND Timestamp >= now() - INTERVAL {mins:UInt32} MINUTE
+              AND {tenant_scope}
             GROUP BY operation ORDER BY calls DESC LIMIT 8
             """,
             {"svc": service, "mins": minutes},
         )
     )
     upstream = _rows(
-        ch_query(
+        ch_query_scoped(
             """
             SELECT p.ServiceName AS service, count() AS calls
             FROM otel_traces AS c
@@ -499,13 +491,14 @@ def stats_service_detail(
               ON c.ParentSpanId = p.SpanId AND c.TraceId = p.TraceId
             WHERE c.ServiceName = {svc:String} AND p.ServiceName != {svc:String}
               AND c.Timestamp >= now() - INTERVAL {mins:UInt32} MINUTE
+              AND {tenant_scope}
             GROUP BY service ORDER BY calls DESC LIMIT 8
             """,
             {"svc": service, "mins": minutes},
         )
     )
     downstream = _rows(
-        ch_query(
+        ch_query_scoped(
             """
             SELECT c.ServiceName AS service, count() AS calls,
                    countIf(c.StatusCode = 'Error') AS errors
@@ -514,6 +507,7 @@ def stats_service_detail(
               ON c.ParentSpanId = p.SpanId AND c.TraceId = p.TraceId
             WHERE p.ServiceName = {svc:String} AND c.ServiceName != {svc:String}
               AND c.Timestamp >= now() - INTERVAL {mins:UInt32} MINUTE
+              AND {tenant_scope}
             GROUP BY service ORDER BY calls DESC LIMIT 8
             """,
             {"svc": service, "mins": minutes},
@@ -533,26 +527,13 @@ def stats_service_detail(
 # --------------------------------------------------------------------------
 
 
-@router.get("/applications")
-def list_applications():
-    query = """
-        SELECT DISTINCT ResourceAttributes['service.namespace'] AS app
-        FROM otel_traces
-        WHERE Timestamp >= now() - INTERVAL 1440 MINUTE
-          AND ResourceAttributes['service.namespace'] != ''
-        ORDER BY app
-    """
-    apps = [row[0] for row in ch_query(query).result_rows]
-    return {"applications": apps}
-
-
 @router.get("/stats/service-detail")
 def stats_service_detail(
     service: str = Query(..., min_length=1, max_length=128),
     minutes: int = Query(60, ge=1, le=10080),
 ):
     totals = _rows(
-        ch_query(
+        ch_query_scoped(
             """
             SELECT count() AS spans,
                    countIf(StatusCode = 'Error') AS errors,
@@ -563,12 +544,13 @@ def stats_service_detail(
             FROM otel_traces
             WHERE ServiceName = {svc:String}
               AND Timestamp >= now() - INTERVAL {mins:UInt32} MINUTE
+              AND {tenant_scope}
             """,
             {"svc": service, "mins": minutes},
         )
     )
     operations = _rows(
-        ch_query(
+        ch_query_scoped(
             """
             SELECT SpanName AS operation, count() AS calls,
                    countIf(StatusCode = 'Error') AS errors,
@@ -576,13 +558,14 @@ def stats_service_detail(
             FROM otel_traces
             WHERE ServiceName = {svc:String}
               AND Timestamp >= now() - INTERVAL {mins:UInt32} MINUTE
+              AND {tenant_scope}
             GROUP BY operation ORDER BY calls DESC LIMIT 8
             """,
             {"svc": service, "mins": minutes},
         )
     )
     upstream = _rows(
-        ch_query(
+        ch_query_scoped(
             """
             SELECT p.ServiceName AS service, count() AS calls
             FROM otel_traces AS c
@@ -590,13 +573,14 @@ def stats_service_detail(
               ON c.ParentSpanId = p.SpanId AND c.TraceId = p.TraceId
             WHERE c.ServiceName = {svc:String} AND p.ServiceName != {svc:String}
               AND c.Timestamp >= now() - INTERVAL {mins:UInt32} MINUTE
+              AND {tenant_scope}
             GROUP BY service ORDER BY calls DESC LIMIT 8
             """,
             {"svc": service, "mins": minutes},
         )
     )
     downstream = _rows(
-        ch_query(
+        ch_query_scoped(
             """
             SELECT c.ServiceName AS service, count() AS calls,
                    countIf(c.StatusCode = 'Error') AS errors
@@ -605,6 +589,7 @@ def stats_service_detail(
               ON c.ParentSpanId = p.SpanId AND c.TraceId = p.TraceId
             WHERE p.ServiceName = {svc:String} AND c.ServiceName != {svc:String}
               AND c.Timestamp >= now() - INTERVAL {mins:UInt32} MINUTE
+              AND {tenant_scope}
             GROUP BY service ORDER BY calls DESC LIMIT 8
             """,
             {"svc": service, "mins": minutes},

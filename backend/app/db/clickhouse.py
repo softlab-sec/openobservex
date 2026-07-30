@@ -67,3 +67,45 @@ def ch_query(query: str, parameters: dict[str, Any] | None = None, retries: int 
             if attempt + 1 < retries:
                 time.sleep(0.3)
     raise last  # type: ignore[misc]
+
+
+def ch_query_scoped(
+    query: str,
+    parameters: dict[str, Any] | None = None,
+    *,
+    where_placeholder: str = "{tenant_scope}",
+    app_namespace: str | None = None,
+):
+    """Run a telemetry query with mandatory tenant isolation injected.
+
+    The query MUST contain the placeholder {tenant_scope}; it is replaced with
+    a clause restricting rows to the caller's owned tenant tags. If the caller
+    owns nothing, the clause is '1 = 0' (zero rows). This fails closed: a query
+    without the placeholder raises, so isolation can never be silently skipped.
+    """
+    from app.core.tenant import get_tenant_context
+
+    if where_placeholder not in query:
+        raise ValueError(
+            "ch_query_scoped requires the {tenant_scope} placeholder — "
+            "refusing to run an unscoped telemetry query"
+        )
+
+    ctx = get_tenant_context()
+    params = dict(parameters or {})
+
+    if not ctx.owned_tags:
+        clause = "1 = 0"
+    else:
+        names = []
+        for i, tag in enumerate(ctx.owned_tags):
+            key = f"_tenant{i}"
+            params[key] = tag
+            names.append(f"{{{key}:String}}")
+        clause = f"ResourceAttributes['tenant.id'] IN ({','.join(names)})"
+        if app_namespace:
+            params["_app_ns"] = app_namespace
+            clause += " AND ResourceAttributes['service.namespace'] = {_app_ns:String}"
+
+    scoped = query.replace(where_placeholder, clause)
+    return ch_query(scoped, params)

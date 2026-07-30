@@ -34,7 +34,12 @@ class ServiceTelemetry:
 
 
 def build_service(name: str) -> ServiceTelemetry:
-    resource = Resource.create({"service.name": name, "deployment.environment": "demo"})
+    resource = Resource.create({
+        "service.name": name,
+        "deployment.environment": "demo",
+        "service.namespace": "demo-shop",
+        "tenant.id": "demo",
+    })
 
     # --- traces ---
     tracer_provider = TracerProvider(resource=resource)
