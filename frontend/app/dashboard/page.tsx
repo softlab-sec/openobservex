@@ -27,6 +27,7 @@ import { AiButton, AiResult } from "@/components/AiPanel";
 import { Card, RangePicker, Stat, colorFor } from "@/components/ui";
 import {
   apiGet,
+  type Application,
   apiPost,
   type EndpointStat,
   type ErrorPattern,
@@ -51,6 +52,8 @@ const tooltipStyle = {
 export default function DashboardPage() {
   const [minutes, setMinutes] = useState(60);
   const [service, setService] = useState<string | null>(null);
+  const [app, setApp] = useState("all");
+  const [apps, setApps] = useState<Application[]>([]);
   const [errorsOnly, setErrorsOnly] = useState(false);
 
   const [ov, setOv] = useState<Overview | null>(null);
@@ -71,9 +74,10 @@ export default function DashboardPage() {
       const p = new URLSearchParams({ minutes: String(minutes) });
       if (service) p.set("service", service);
       if (errorsOnly) p.set("errors_only", "true");
+      if (app !== "all") p.set("app", app);
       return `${p.toString()}${extra}`;
     },
-    [minutes, service, errorsOnly]
+    [minutes, service, errorsOnly, app]
   );
 
   const load = useCallback(() => {
@@ -81,17 +85,17 @@ export default function DashboardPage() {
       apiGet<Overview>(`/api/v1/stats/overview?${qs()}`),
       apiGet<{ points: SeriesPoint[] }>(`/api/v1/stats/timeseries?${qs()}`),
       apiGet<{ services: ServiceStat[] }>(
-        `/api/v1/stats/services?minutes=${minutes}${errorsOnly ? "&errors_only=true" : ""}`
+        `/api/v1/stats/services?minutes=${minutes}${errorsOnly ? "&errors_only=true" : ""}${app !== "all" ? `&app=${encodeURIComponent(app)}` : ""}`
       ),
       apiGet<{ endpoints: EndpointStat[] }>(`/api/v1/stats/endpoints?${qs("&limit=8")}`),
       apiGet<{ patterns: ErrorPattern[] }>(
         `/api/v1/stats/error-patterns?minutes=${minutes}&limit=8${
           service ? `&service=${encodeURIComponent(service)}` : ""
-        }`
+        }${app !== "all" ? `&app=${encodeURIComponent(app)}` : ""}`
       ),
       apiGet<{ samples: LatencySample[] }>(`/api/v1/stats/latency-samples?${qs("&limit=400")}`),
       apiGet<{ buckets: LatencyBucket[] }>(`/api/v1/stats/latency-distribution?${qs()}`),
-      apiGet<{ share: ErrorShare[] }>(`/api/v1/stats/error-share?minutes=${minutes}`),
+      apiGet<{ share: ErrorShare[] }>(`/api/v1/stats/error-share?minutes=${minutes}${app !== "all" ? `&app=${encodeURIComponent(app)}` : ""}`),
     ])
       .then(([o, t, s, ep, epat, ls, ld, es]) => {
         setOv(o);
@@ -113,9 +117,15 @@ export default function DashboardPage() {
         setErr(null);
       })
       .catch((e: Error) => setErr(e.message));
-  }, [qs, minutes, service, errorsOnly]);
+  }, [qs, minutes, service, errorsOnly, app]);
 
-  usePoll(load, [minutes, service, errorsOnly]);
+  usePoll(load, [minutes, service, errorsOnly, app]);
+
+  usePoll(
+    useCallback(() => apiGet<Application[]>("/api/v1/applications").then(setApps).catch(() => {}), []),
+    [],
+    60000
+  );
 
   function summarize() {
     setAiLoading(true);
@@ -147,6 +157,20 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {apps.length > 0 && (
+            <select
+              value={app}
+              onChange={(e) => setApp(e.target.value)}
+              className="rounded-lg border border-white/10 bg-black/30 px-3 py-1.5 text-sm outline-none focus:border-white/40"
+            >
+              <option value="all">All applications</option>
+              {apps.map((a) => (
+                <option key={a.id} value={a.namespace}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          )}
           <AiButton onClick={summarize} loading={aiLoading} label="AI summary" />
           <button
             onClick={() => setErrorsOnly((v) => !v)}

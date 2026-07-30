@@ -63,6 +63,7 @@ def stats_overview(
     minutes: int = Query(60, ge=1, le=10080),
     service: Optional[str] = Query(None),
     errors_only: bool = Query(False),
+    app: Optional[str] = Query(None),
 ):
     where, params = _trace_filters(minutes, service, errors_only)
     query = f"""
@@ -79,7 +80,7 @@ def stats_overview(
     """
     import math
 
-    data = _rows(ch_query_scoped(query, params))
+    data = _rows(ch_query_scoped(query, params, app_namespace=app))
     row = data[0] if data else {}
     # zero rows (e.g. tenant owns nothing) -> quantiles come back NaN, which is
     # not JSON-serialisable. Normalise the whole row to clean numbers.
@@ -97,6 +98,7 @@ def stats_timeseries(
     minutes: int = Query(60, ge=1, le=10080),
     service: Optional[str] = Query(None),
     errors_only: bool = Query(False),
+    app: Optional[str] = Query(None),
 ):
     where, params = _trace_filters(minutes, service, errors_only)
     query = f"""
@@ -112,13 +114,14 @@ def stats_timeseries(
         GROUP BY bucket
         ORDER BY bucket ASC
     """
-    return {"points": _rows(ch_query_scoped(query, params))}
+    return {"points": _rows(ch_query_scoped(query, params, app_namespace=app))}
 
 
 @router.get("/stats/services")
 def stats_services(
     minutes: int = Query(60, ge=1, le=10080),
     errors_only: bool = Query(False),
+    app: Optional[str] = Query(None),
 ):
     where, params = _trace_filters(minutes, None, errors_only, root_only=False)
     query = f"""
@@ -134,7 +137,7 @@ def stats_services(
         GROUP BY ServiceName
         ORDER BY spans DESC
     """
-    return {"services": _rows(ch_query_scoped(query, params))}
+    return {"services": _rows(ch_query_scoped(query, params, app_namespace=app))}
 
 
 @router.get("/stats/endpoints")
@@ -143,6 +146,7 @@ def stats_endpoints(
     limit: int = Query(10, ge=1, le=50),
     service: Optional[str] = Query(None),
     errors_only: bool = Query(False),
+    app: Optional[str] = Query(None),
 ):
     where, params = _trace_filters(minutes, service, errors_only)
     params["lim"] = limit
@@ -162,7 +166,7 @@ def stats_endpoints(
         ORDER BY requests DESC
         LIMIT {{lim:UInt32}}
     """
-    return {"endpoints": _rows(ch_query_scoped(query, params))}
+    return {"endpoints": _rows(ch_query_scoped(query, params, app_namespace=app))}
 
 
 @router.get("/stats/latency-samples")
@@ -171,6 +175,7 @@ def stats_latency_samples(
     limit: int = Query(400, ge=10, le=2000),
     service: Optional[str] = Query(None),
     errors_only: bool = Query(False),
+    app: Optional[str] = Query(None),
 ):
     """Individual request latencies for a scatter plot."""
     where, params = _trace_filters(minutes, service, errors_only)
@@ -187,7 +192,7 @@ def stats_latency_samples(
         ORDER BY Timestamp DESC
         LIMIT {{lim:UInt32}}
     """
-    return {"samples": _rows(ch_query_scoped(query, params))}
+    return {"samples": _rows(ch_query_scoped(query, params, app_namespace=app))}
 
 
 @router.get("/stats/latency-distribution")
@@ -195,6 +200,7 @@ def stats_latency_distribution(
     minutes: int = Query(60, ge=1, le=10080),
     service: Optional[str] = Query(None),
     errors_only: bool = Query(False),
+    app: Optional[str] = Query(None),
 ):
     """Request counts bucketed by duration, for a histogram."""
     where, params = _trace_filters(minutes, service, errors_only)
@@ -223,7 +229,7 @@ def stats_latency_distribution(
         GROUP BY bucket, sortOrder
         ORDER BY sortOrder ASC
     """
-    return {"buckets": _rows(ch_query_scoped(query, params))}
+    return {"buckets": _rows(ch_query_scoped(query, params, app_namespace=app))}
 
 
 @router.get("/stats/error-share")
@@ -277,6 +283,7 @@ def stats_error_patterns(
     minutes: int = Query(60, ge=1, le=10080),
     limit: int = Query(10, ge=1, le=50),
     service: Optional[str] = Query(None),
+    app: Optional[str] = Query(None),
 ):
     clauses = [
         "upper(SeverityText) = 'ERROR'",
@@ -300,7 +307,7 @@ def stats_error_patterns(
         ORDER BY occurrences DESC
         LIMIT {{lim:UInt32}}
     """
-    return {"patterns": _rows(ch_query_scoped(query, params))}
+    return {"patterns": _rows(ch_query_scoped(query, params, app_namespace=app))}
 
 
 # --------------------------------------------------------------------------
@@ -314,6 +321,7 @@ def list_traces(
     minutes: int = Query(60, ge=1, le=10080),
     service: Optional[str] = Query(None),
     errors_only: bool = Query(False),
+    app: Optional[str] = Query(None),
 ):
     where, params = _trace_filters(minutes, service, errors_only)
     params["lim"] = limit
@@ -342,7 +350,7 @@ def list_traces(
         ) AS c ON r.TraceId = c.TraceId
         ORDER BY Timestamp DESC
     """
-    items = _rows(ch_query_scoped(query, params))
+    items = _rows(ch_query_scoped(query, params, app_namespace=app))
     return {"count": len(items), "items": items}
 
 
@@ -373,6 +381,7 @@ def get_trace(trace_id: str):
 def list_spans(
     limit: int = Query(50, ge=1, le=1000),
     service: Optional[str] = Query(None),
+    app: Optional[str] = Query(None),
 ):
     clauses = ["{tenant_scope}"]
     params: dict = {"lim": limit}
@@ -388,7 +397,7 @@ def list_spans(
         ORDER BY Timestamp DESC
         LIMIT {{lim:UInt32}}
     """
-    items = _rows(ch_query_scoped(query, params))
+    items = _rows(ch_query_scoped(query, params, app_namespace=app))
     return {"count": len(items), "items": items}
 
 
@@ -404,6 +413,7 @@ def list_logs(
     service: Optional[str] = Query(None),
     severity: Optional[str] = Query(None, description="Comma separated, e.g. ERROR,WARN"),
     search: Optional[str] = Query(None, description="Case-insensitive text match on body"),
+    app: Optional[str] = Query(None),
 ):
     filters = ["Timestamp >= now() - INTERVAL {mins:UInt32} MINUTE", "{tenant_scope}"]
     params: dict = {"mins": minutes, "lim": limit}
@@ -426,7 +436,7 @@ def list_logs(
         ORDER BY Timestamp DESC
         LIMIT {{lim:UInt32}}
     """
-    items = _rows(ch_query_scoped(query, params))
+    items = _rows(ch_query_scoped(query, params, app_namespace=app))
     return {"count": len(items), "items": items}
 
 
@@ -434,6 +444,7 @@ def list_logs(
 def log_severities(
     minutes: int = Query(60, ge=1, le=10080),
     service: Optional[str] = Query(None),
+    app: Optional[str] = Query(None),
 ):
     clauses = ["Timestamp >= now() - INTERVAL {mins:UInt32} MINUTE", "{tenant_scope}"]
     params: dict = {"mins": minutes}
@@ -447,7 +458,7 @@ def log_severities(
         GROUP BY severity
         ORDER BY count DESC
     """
-    return {"severities": _rows(ch_query_scoped(query, params))}
+    return {"severities": _rows(ch_query_scoped(query, params, app_namespace=app))}
 
 
 @router.get("/services")
