@@ -17,8 +17,20 @@ router = APIRouter(
 
 
 def _rows(result) -> list[dict]:
+    import math
+
     cols = result.column_names
-    return [dict(zip(cols, row)) for row in result.result_rows]
+    out = []
+    for row in result.result_rows:
+        d = {}
+        for k, v in zip(cols, row):
+            # ClickHouse quantile()/avg() over empty buckets yield NaN/Inf,
+            # which are not JSON-serialisable — coerce to 0 so responses never 500.
+            if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
+                v = 0
+            d[k] = v
+        out.append(d)
+    return out
 
 
 def _trace_filters(
