@@ -136,17 +136,25 @@ services:
     depends_on:
       - otel-collector
 
+  redis:
+    image: redis:7-alpine
+    networks:
+      - oox
+
   ingest-gateway:
     build: ./gateway
     environment:
       COLLECTOR_HTTP: http://otel-collector:4318
       PG_DSN: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
     ports:
       - "8100:8100"
     depends_on:
       postgres:
         condition: service_healthy
       otel-collector:
+        condition: service_started
+      redis:
         condition: service_started
     networks:
       - oox

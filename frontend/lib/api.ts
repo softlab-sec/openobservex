@@ -320,3 +320,18 @@ export type Application = {
   namespace: string;
   created_at: string;
 };
+
+export type ApiKeyRow = {
+  id: string;
+  prefix: string;
+  name: string;
+  created_at: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+};
+export type ApiKeyCreated = {
+  id: string;
+  prefix: string;
+  name: string;
+  full_key: string;
+};

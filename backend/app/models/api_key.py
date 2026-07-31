@@ -26,6 +26,7 @@ class ApiKey(Base):
     prefix: Mapped[str] = mapped_column(String(32), unique=True, index=True)
     key_hash: Mapped[str] = mapped_column(String(64), index=True)
     name: Mapped[str] = mapped_column(String(255), default="default")
+    rate_limit_rps: Mapped[int] = mapped_column(default=50, server_default="50")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

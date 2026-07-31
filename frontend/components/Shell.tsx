@@ -26,6 +26,12 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/incidents", label: "Incidents", icon: "M12 9v4m0 4h.01M10.3 3.9L2 18a1 1 0 00.9 1.5h18.2A1 1 0 0022 18L13.7 3.9a1 1 0 00-1.7 0z" },
     ],
   },
+  {
+    title: "Manage",
+    items: [
+      { href: "/applications", label: "Applications", icon: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z" },
+    ],
+  },
 ];
 
 export default function Shell({ children }: { children: React.ReactNode }) {

@@ -1,21 +1,21 @@
 """OpenObserveX Ingest Gateway.
 
-Sits in front of the OTel Collector. For every incoming OTLP/HTTP request it:
-  1. validates the Bearer API key against Postgres (SHA-256 hash lookup),
-  2. resolves the key's real tenant.id + service.namespace,
-  3. STRIPS any sender-supplied tenant.id / service.namespace from the payload
-     and injects the verified values (anti-spoofing),
-  4. forwards the sanitized protobuf to the collector's OTLP/HTTP endpoint.
-
-A sender can only write into the tenant its key belongs to — claimed tags are
-overwritten, never trusted.
+Pipeline for every OTLP/HTTP request:
+  1. validate Bearer API key (SHA-256 hash lookup in Postgres, not revoked),
+  2. entitlement gate: reject if the owning org's status != 'active' (403),
+  3. rate limit: per-key sliding window in Redis; over quota -> 429,
+  4. anti-spoof: strip sender-supplied tenant.id/service.namespace, inject the
+     verified values derived from the key,
+  5. forward sanitized protobuf to the collector.
 """
 
 import hashlib
 import os
+import time
 
 import httpx
 import psycopg
+import redis
 from fastapi import FastAPI, Header, HTTPException, Request, Response
 
 from opentelemetry.proto.collector.trace.v1 import trace_service_pb2
@@ -25,8 +25,10 @@ from opentelemetry.proto.common.v1 import common_pb2
 
 COLLECTOR = os.getenv("COLLECTOR_HTTP", "http://otel-collector:4318")
 PG_DSN = os.getenv("PG_DSN", "postgresql://oox:oox@postgres:5432/openobservex")
+REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 
 app = FastAPI(title="OpenObserveX Ingest Gateway")
+_redis = redis.from_url(REDIS_URL, decode_responses=True)
 
 _SIGNALS = {
     "traces": (trace_service_pb2.ExportTraceServiceRequest, "resource_spans"),
@@ -35,21 +37,35 @@ _SIGNALS = {
 }
 
 
-def _resolve_tenant(api_key: str) -> tuple[str, str] | None:
-    """Look up a key's (tenant_tag, namespace) by SHA-256 hash. None if invalid/revoked."""
+def _resolve_key(api_key: str):
+    """Return (tenant_tag, namespace, org_status, rate_limit_rps, prefix) or None."""
     key_hash = hashlib.sha256(api_key.encode()).hexdigest()
     with psycopg.connect(PG_DSN, autocommit=True) as conn:
         row = conn.execute(
             """
-            SELECT a.tenant_tag, a.namespace
-            FROM api_keys k JOIN applications a ON k.application_id = a.id
+            SELECT a.tenant_tag, a.namespace, o.status, k.rate_limit_rps, k.prefix
+            FROM api_keys k
+            JOIN applications a ON k.application_id = a.id
+            JOIN organizations o ON a.organization_id = o.id
             WHERE k.key_hash = %s AND k.revoked_at IS NULL
             """,
             (key_hash,),
         ).fetchone()
         if row:
             conn.execute("UPDATE api_keys SET last_used_at = now() WHERE key_hash = %s", (key_hash,))
-        return (row[0], row[1]) if row else None
+        return row
+
+
+def _rate_ok(prefix: str, limit: int) -> bool:
+    """Fixed 1-second window per key via Redis INCR + EXPIRE. Fail-open if Redis down."""
+    try:
+        bucket = f"rl:{prefix}:{int(time.time())}"
+        count = _redis.incr(bucket)
+        if count == 1:
+            _redis.expire(bucket, 2)
+        return count <= limit
+    except redis.RedisError:
+        return True
 
 
 def _enforce(raw: bytes, signal: str, tenant: str, namespace: str) -> bytes:
@@ -82,10 +98,16 @@ async def ingest(signal: str, request: Request, authorization: str = Header(None
         raise HTTPException(401, "missing api key")
     api_key = authorization.removeprefix("Bearer ").strip()
 
-    resolved = _resolve_tenant(api_key)
-    if not resolved:
+    row = _resolve_key(api_key)
+    if not row:
         raise HTTPException(403, "invalid or revoked api key")
-    tenant, namespace = resolved
+    tenant, namespace, org_status, rate_limit, prefix = row
+
+    if org_status != "active":
+        raise HTTPException(403, f"organization is {org_status}")
+
+    if not _rate_ok(prefix, rate_limit):
+        raise HTTPException(429, "rate limit exceeded")
 
     raw = await request.body()
     try:
