@@ -9,6 +9,7 @@ from app.api.alerts import router as alerts_router
 from app.api.infra import router as infra_router
 from app.api.applications import router as applications_router
 from app.api.api_keys import router as api_keys_router
+from app.api.channels import router as channels_router
 from app.api.auth import router as auth_router
 from app.api.telemetry import router as telemetry_router
 from app.db.clickhouse import ch_query
@@ -44,6 +45,7 @@ app.include_router(alerts_router)
 app.include_router(infra_router)
 app.include_router(applications_router)
 app.include_router(api_keys_router)
+app.include_router(channels_router)
 
 
 @app.get("/", tags=["system"])
