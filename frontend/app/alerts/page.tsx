@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Shell, { usePoll } from "@/components/Shell";
 import { Card } from "@/components/ui";
 import { apiGet, apiSend, type AlertRule, type AlertRuleInput } from "@/lib/api";
@@ -14,13 +14,17 @@ const KIND_LABEL: Record<string, string> = {
 const KIND_UNIT: Record<string, string> = { error_rate: "%", latency: "ms", log_spike: "logs", service_down: "" };
 const EMPTY: AlertRuleInput = {
   name: "", kind: "error_rate", service: null, threshold: 5, percentile: 95,
-  for_minutes: 5, min_samples: 20, enabled: true, webhook_urls: null,
+  for_minutes: 5, min_samples: 20, enabled: true, webhook_urls: null, channel_ids: null,
 };
 
 function RuleModal({ initial, onClose, onSaved }: { initial: AlertRule | null; onClose: () => void; onSaved: () => void }) {
   const [form, setForm] = useState<AlertRuleInput>(initial ? { ...initial } : { ...EMPTY });
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [channels, setChannels] = useState<NotificationChannel[]>([]);
+  useEffect(() => {
+    apiGet<NotificationChannel[]>("/api/v1/channels").then(setChannels).catch(() => {});
+  }, []);
   function set<K extends keyof AlertRuleInput>(k: K, v: AlertRuleInput[K]) { setForm((f) => ({ ...f, [k]: v })); }
   async function save() {
     setSaving(true); setErr(null);
@@ -66,7 +70,31 @@ function RuleModal({ initial, onClose, onSaved }: { initial: AlertRule | null; o
             <div><label className={label}>Min samples</label>
               <input type="number" className={input} value={form.min_samples} onChange={(e) => set("min_samples", Number(e.target.value))} /></div>
           </div>
-          <div><label className={label}>Webhook URLs (comma-separated)</label>
+          <div>
+            <label className={label}>Notify channels</label>
+            {channels.length === 0 ? (
+              <p className="text-xs text-white/40">No channels yet. Add them under Manage &rarr; Channels.</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {channels.map((ch) => {
+                  const selected = (form.channel_ids ?? "").split(",").filter(Boolean);
+                  const on = selected.includes(ch.id);
+                  return (
+                    <button type="button" key={ch.id}
+                      onClick={() => {
+                        const next = on ? selected.filter((x) => x !== ch.id) : [...selected, ch.id];
+                        set("channel_ids", next.join(",") || null);
+                      }}
+                      className={`rounded-lg border px-2.5 py-1 text-xs transition ${on ? "border-violet-400/50 bg-violet-500/20 text-violet-100" : "border-white/10 text-white/50 hover:text-white"}`}>
+                      {ch.name} <span className="opacity-50">({ch.kind})</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div><label className={label}>Webhook URLs (advanced, comma-separated)</label>
             <input className={input} value={form.webhook_urls ?? ""} onChange={(e) => set("webhook_urls", e.target.value || null)} placeholder="https://hooks.slack.com/services/..." /></div>
           <label className="flex items-center gap-2 text-sm text-white/70">
             <input type="checkbox" checked={form.enabled} onChange={(e) => set("enabled", e.target.checked)} /> Enabled

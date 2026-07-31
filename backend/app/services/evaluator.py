@@ -94,6 +94,24 @@ def _evaluate_rule(rule: AlertRule) -> tuple[bool, float, str]:
     return (False, 0.0, f"unknown rule kind: {rule.kind}")
 
 
+
+def _notify_channels(db, rule: AlertRule, subject: str, body: str) -> None:
+    """Send to each NotificationChannel this rule selected. Never raises."""
+    if not rule.channel_ids:
+        return
+    from app.models import NotificationChannel
+    from app.services.dispatch import dispatch, parse_config
+
+    ids = [c.strip() for c in rule.channel_ids.split(",") if c.strip()]
+    for cid in ids:
+        try:
+            ch = db.get(NotificationChannel, cid)
+            if ch and ch.enabled:
+                dispatch(ch.kind, parse_config(ch.config), subject, body)
+        except Exception:
+            logger.exception("channel dispatch failed for %s", cid)
+
+
 def _fire(db, rule: AlertRule, value: float, summary: str) -> None:
     existing = db.scalar(
         select(Incident).where(
@@ -131,6 +149,7 @@ def _fire(db, rule: AlertRule, value: float, summary: str) -> None:
     }
     if rule.webhook_urls:
         notifications.notify_all(rule.webhook_urls.split(","), text, payload)
+    _notify_channels(db, rule, f"FIRING: {rule.name}", f"{summary}" + (f"\nService: {rule.service}" if rule.service else ""))
     logger.info("incident FIRING: %s (%s)", rule.name, summary)
 
 
@@ -157,6 +176,7 @@ def _resolve(db, rule: AlertRule, value: float) -> None:
     }
     if rule.webhook_urls:
         notifications.notify_all(rule.webhook_urls.split(","), text, payload)
+    _notify_channels(db, rule, f"RESOLVED: {rule.name}", f"Recovered (now {value}).")
     logger.info("incident RESOLVED: %s", rule.name)
 
 

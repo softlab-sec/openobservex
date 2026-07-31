@@ -335,3 +335,12 @@ export type ApiKeyCreated = {
   name: string;
   full_key: string;
 };
+
+export type NotificationChannel = {
+  id: string;
+  name: string;
+  kind: "email" | "slack" | "discord" | "webhook";
+  config: Record<string, unknown>;
+  enabled: boolean;
+  created_at: string;
+};

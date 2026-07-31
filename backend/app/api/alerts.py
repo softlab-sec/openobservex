@@ -28,6 +28,7 @@ class RuleIn(BaseModel):
     min_samples: int = Field(default=20, ge=0, le=100000)
     enabled: bool = True
     webhook_urls: str | None = None
+    channel_ids: str | None = None
 
 
 class RuleOut(BaseModel):
@@ -41,6 +42,7 @@ class RuleOut(BaseModel):
     min_samples: int
     enabled: bool
     webhook_urls: str | None
+    channel_ids: str | None
     created_at: datetime
     model_config = {"from_attributes": True}
 
@@ -89,6 +91,7 @@ def create_rule(
         min_samples=body.min_samples,
         enabled=body.enabled,
         webhook_urls=body.webhook_urls or None,
+        channel_ids=body.channel_ids or None,
     )
     db.add(rule)
     db.commit()
