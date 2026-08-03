@@ -141,15 +141,17 @@ export default function IncidentDetailPage({ params }: { params: Promise<{ id: s
             </div>
           )}
 
-          {ev.error_patterns.length > 0 && (
+          {ev.triggers && ev.triggers.length > 0 && (
             <div className="mb-5">
-              <div className="mb-2 text-xs uppercase tracking-wide text-white/35">Top error messages</div>
+              <div className="mb-2 text-xs uppercase tracking-wide text-white/35">Triggering operations</div>
               <div className="space-y-1.5">
-                {ev.error_patterns.slice(0, 6).map((p2, i) => (
-                  <div key={i} className="flex items-start gap-3 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2">
-                    <span className="rounded bg-rose-500/12 px-1.5 py-0.5 text-[10px] text-rose-300">{p2.occurrences}x</span>
-                    <span className="min-w-0 flex-1 truncate font-mono text-xs text-white/70">{p2.pattern}</span>
-                    <span className="shrink-0 text-[11px] text-white/35">{p2.service}</span>
+                {ev.triggers.slice(0, 8).map((tg, i) => (
+                  <div key={i} className="flex items-center gap-3 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2">
+                    <span className="shrink-0 rounded bg-rose-500/12 px-1.5 py-0.5 text-[10px] text-rose-300">{tg.occurrences}x</span>
+                    <span className="shrink-0 font-mono text-xs text-sky-300/80">{tg.endpoint}</span>
+                    <span className="min-w-0 flex-1 truncate text-xs text-white/70">{tg.error}</span>
+                    <span className="shrink-0 text-[11px] text-white/35">{tg.service}</span>
+                    <span className="w-16 shrink-0 text-right text-[11px] text-white/40">p95 {tg.p95_ms}ms</span>
                   </div>
                 ))}
               </div>

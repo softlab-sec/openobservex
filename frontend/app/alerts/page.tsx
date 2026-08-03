@@ -68,8 +68,7 @@ function FiringAlerts() {
           const m = sevMeta(a.severity);
           const ev = evidence[a.id];
           const topSvc = ev?.affected_services?.[0];
-          const topErr = ev?.error_patterns?.[0];
-          const topTrace = ev?.sample_traces?.[0];
+          const topTrig = ev?.triggers?.[0];
           const ackd = a.acknowledged_at != null;
           return (
             <div key={a.id} className={`overflow-hidden rounded-xl border ${m.border} ${m.bg}`}>
@@ -89,14 +88,14 @@ function FiringAlerts() {
 
                   <div className="mt-2 grid gap-x-6 gap-y-1 text-xs sm:grid-cols-2">
                     <div><span className="text-white/35">Service: </span>
-                      <span className="text-white/80">{topSvc?.service ?? a.service ?? "all services"}</span>
+                      <span className="text-white/80">{topTrig?.service ?? topSvc?.service ?? a.service ?? "all services"}</span>
                       {topSvc && <span className="text-rose-300"> ({topSvc.error_rate}% errors)</span>}
                     </div>
                     <div><span className="text-white/35">Endpoint: </span>
-                      <span className="text-white/80">{topTrace?.operation ?? "—"}</span>
+                      <span className="font-mono text-sky-300/80">{topTrig?.endpoint ?? "—"}</span>
                     </div>
                     <div className="sm:col-span-2"><span className="text-white/35">Trigger: </span>
-                      <span className="font-mono text-white/70">{topErr?.pattern ?? a.summary}</span>
+                      <span className="text-white/70">{topTrig ? `${topTrig.error} (${topTrig.occurrences}x)` : a.summary}</span>
                     </div>
                   </div>
 

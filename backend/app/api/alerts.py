@@ -347,6 +347,23 @@ async def incident_evidence(
         LIMIT 10
     """
 
+    triggers_q = f"""
+        SELECT ServiceName AS service,
+               SpanName AS endpoint,
+               StatusMessage AS error,
+               count() AS occurrences,
+               round(quantile(0.95)(Duration) / 1000000, 1) AS p95_ms,
+               max(Timestamp) AS last_seen
+        FROM otel_traces
+        WHERE StatusCode = 'Error'
+          AND Timestamp >= parseDateTimeBestEffort({{start:String}})
+          {svc_clause}
+          AND {{tenant_scope}}
+        GROUP BY service, endpoint, error
+        ORDER BY occurrences DESC
+        LIMIT 10
+    """
+
     def rows(q):
         try:
             res = ch_query_scoped(q, params, app_namespace=None)
@@ -357,6 +374,7 @@ async def incident_evidence(
 
     errors = rows(err_q)
     services = rows(svc_breakdown_q)
+    triggers = rows(triggers_q)
     traces = rows(trace_q)
     trend_raw = rows(trend_q)
     trend = [
@@ -372,6 +390,11 @@ async def incident_evidence(
             {"service": sv["service"], "errors": sv["errors"], "total": sv["total"],
              "error_rate": float(sv["error_rate"]), "p95_ms": float(sv["p95_ms"])}
             for sv in services
+        ],
+        "triggers": [
+            {"service": tg["service"], "endpoint": tg["endpoint"], "error": tg["error"],
+             "occurrences": tg["occurrences"], "p95_ms": float(tg["p95_ms"]), "last_seen": str(tg["last_seen"])}
+            for tg in triggers
         ],
         "error_patterns": errors,
         "sample_traces": [

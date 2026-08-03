@@ -412,7 +412,16 @@ export type TrendPoint = {
   errors: number;
   total: number;
 };
+export type IncidentTrigger = {
+  service: string;
+  endpoint: string;
+  error: string;
+  occurrences: number;
+  p95_ms: number;
+  last_seen: string;
+};
 export type IncidentEvidence = {
+  triggers: IncidentTrigger[];
   incident_id: string;
   service: string | null;
   observed_value: number;
