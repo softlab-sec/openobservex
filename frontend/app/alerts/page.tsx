@@ -70,7 +70,7 @@ function FiringAlerts({ minutes, filter }: { minutes: number; filter: "all" | "i
     <div className="mb-8">
       <div className="mb-3 flex items-center gap-2">
         <span className="h-2 w-2 animate-pulse rounded-full bg-rose-500" />
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-rose-300">Firing now</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-rose-300">Active alerts</h2>
         <span className="text-xs text-white/40">{shownAlerts.length} active</span>
       </div>
 
@@ -327,7 +327,7 @@ export default function AlertsPage() {
           <h1 className="text-xl font-semibold tracking-tight">Alert rules</h1>
           <p className="text-sm text-white/40">
             {rules.length} rule{rules.length === 1 ? "" : "s"} · {enabledCount} enabled
-            {firingCount > 0 && <span className="text-rose-300"> · {firingCount} firing now</span>}
+            {firingCount > 0 && <span className="text-rose-300"> · {firingCount} active</span>}
           </p>
         </div>
         <button onClick={() => setModal({ open: true, rule: null })}
@@ -353,7 +353,7 @@ export default function AlertsPage() {
                     <span className="font-medium text-white/90">{r.name}</span>
                     {r.is_firing ? (
                       <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] text-rose-300">
-                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rose-400" />firing now
+                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rose-400" />active
                       </span>
                     ) : r.enabled ? (
                       <span className="rounded-full bg-emerald-500/12 px-2 py-0.5 text-[10px] text-emerald-300/90">ok</span>
