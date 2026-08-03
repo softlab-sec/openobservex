@@ -12,7 +12,7 @@ from app.api.auth import get_current_user
 from app.db.postgres import get_db
 from app.db.clickhouse import ch_query_scoped
 from app.api.applications import tenant_dependency
-from app.models import AlertRule, Incident, IncidentEvent, User
+from app.models import AlertRule, Incident, IncidentEvent, User, Anomaly
 from app.services import evaluator, notifications
 
 router = APIRouter(prefix="/api/v1/alerts", tags=["alerts"])
@@ -404,3 +404,35 @@ async def incident_evidence(
         ],
         "trend": trend,
     }
+
+
+class AnomalyOut(BaseModel):
+    id: uuid.UUID
+    service: str
+    metric: str
+    observed: float
+    baseline_mean: float
+    baseline_std: float
+    z_score: float
+    severity: str
+    status: str
+    occurrences: int
+    first_seen: datetime
+    last_seen: datetime
+    resolved_at: datetime | None
+    promoted_incident_id: uuid.UUID | None
+    model_config = {"from_attributes": True}
+
+
+@router.get("/anomalies", response_model=list[AnomalyOut])
+def list_anomalies(
+    status: str | None = Query(None, pattern="^(active|resolved)$"),
+    limit: int = Query(200, ge=1, le=500),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    q = select(Anomaly).where(Anomaly.organization_id == user.organization_id)
+    if status:
+        q = q.where(Anomaly.status == status)
+    q = q.order_by(Anomaly.last_seen.desc()).limit(limit)
+    return db.scalars(q).all()

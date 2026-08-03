@@ -432,3 +432,20 @@ export type IncidentEvidence = {
   sample_traces: SampleTrace[];
   trend: TrendPoint[];
 };
+
+export type AnomalyRow = {
+  id: string;
+  service: string;
+  metric: "error_rate" | "p95_latency";
+  observed: number;
+  baseline_mean: number;
+  baseline_std: number;
+  z_score: number;
+  severity: "critical" | "warning" | "info";
+  status: "active" | "resolved";
+  occurrences: number;
+  first_seen: string;
+  last_seen: string;
+  resolved_at: string | null;
+  promoted_incident_id: string | null;
+};
