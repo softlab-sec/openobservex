@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import Shell, { usePoll } from "@/components/Shell";
 import { apiGet, type IncidentRow } from "@/lib/api";
+import { RangePicker } from "@/components/ui";
 import { sevMeta, sevRank, since, duration } from "@/lib/severity";
 
 const KIND_LABEL: Record<string, string> = {
@@ -20,6 +21,15 @@ export default function IncidentsPage() {
   const [err, setErr] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("active");
   const [sev, setSev] = useState<"all" | "critical" | "warning" | "info">("all");
+  const [minutes, setMinutes] = useState(60);
+
+  const withinWindow = (i: IncidentRow) => {
+    if (i.status === "firing") return true;
+    const cutoff = Date.now() - minutes * 60_000;
+    const st = new Date(i.started_at).getTime();
+    const rs = i.resolved_at ? new Date(i.resolved_at).getTime() : 0;
+    return st >= cutoff || rs >= cutoff;
+  };
 
   const load = () =>
     apiGet<IncidentRow[]>("/api/v1/alerts/incidents?limit=200")
@@ -27,7 +37,8 @@ export default function IncidentsPage() {
       .catch((e: Error) => setErr(e.message));
   usePoll(load, [], 10000);
 
-  const firing = items.filter((i) => i.status === "firing");
+  const windowed = items.filter(withinWindow);
+  const firing = windowed.filter((i) => i.status === "firing");
   const counts = {
     critical: firing.filter((i) => i.severity === "critical").length,
     warning: firing.filter((i) => i.severity === "warning").length,
@@ -36,7 +47,7 @@ export default function IncidentsPage() {
   };
 
   const shown = useMemo(() => {
-    let list = items;
+    let list = items.filter(withinWindow);
     if (filter === "active") list = list.filter((i) => i.status === "firing");
     else if (filter === "resolved") list = list.filter((i) => i.status === "resolved");
     if (sev !== "all") list = list.filter((i) => i.severity === sev);
@@ -45,13 +56,17 @@ export default function IncidentsPage() {
       if (a.severity !== b.severity) return sevRank(a.severity) - sevRank(b.severity);
       return new Date(b.started_at).getTime() - new Date(a.started_at).getTime();
     });
-  }, [items, filter, sev]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, filter, sev, minutes]);
 
   return (
     <Shell>
-      <div className="mb-5">
-        <h1 className="text-xl font-semibold tracking-tight">Incidents</h1>
-        <p className="text-sm text-white/40">Live problems across your services, most severe first.</p>
+      <div className="mb-5 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">Incidents</h1>
+          <p className="text-sm text-white/40">Live problems across your services, most severe first.</p>
+        </div>
+        <RangePicker value={minutes} onChange={setMinutes} />
       </div>
 
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">

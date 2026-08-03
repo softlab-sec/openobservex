@@ -449,3 +449,25 @@ export type AnomalyRow = {
   resolved_at: string | null;
   promoted_incident_id: string | null;
 };
+
+export type AnomalyTrigger = {
+  service: string;
+  endpoint: string;
+  error: string;
+  occurrences: number;
+  p95_ms: number;
+  last_seen: string;
+};
+export type AnomalyTrendPoint = { bucket: string; value: number };
+export type AnomalyEvidence = {
+  anomaly_id: string;
+  service: string | null;
+  metric: string;
+  observed: number;
+  baseline_mean: number;
+  z_score: number;
+  affected_services: AffectedService[];
+  triggers: AnomalyTrigger[];
+  sample_traces: SampleTrace[];
+  trend: AnomalyTrendPoint[];
+};

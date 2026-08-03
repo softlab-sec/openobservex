@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Shell, { usePoll } from "@/components/Shell";
 import { sevMeta, since } from "@/lib/severity";
+import { RangePicker } from "@/components/ui";
 import {
   apiGet, apiSend,
   type AlertRule, type AlertRuleInput, type NotificationChannel,
@@ -28,7 +29,7 @@ const EMPTY: AlertRuleInput = {
   webhook_urls: null, channel_ids: null,
 };
 
-function FiringAlerts() {
+function FiringAlerts({ minutes }: { minutes: number }) {
   const [alerts, setAlerts] = useState<IncidentRow[]>([]);
   const [evidence, setEvidence] = useState<Record<string, IncidentEvidence>>({});
   const [busy, setBusy] = useState<string | null>(null);
@@ -53,18 +54,21 @@ function FiringAlerts() {
     finally { setBusy(null); }
   }
 
-  if (alerts.length === 0) return null;
+  const cutoff = Date.now() - minutes * 60_000;
+  const shownAlerts = alerts.filter((a) => new Date(a.started_at).getTime() >= cutoff);
+
+  if (shownAlerts.length === 0) return null;
 
   return (
     <div className="mb-8">
       <div className="mb-3 flex items-center gap-2">
         <span className="h-2 w-2 animate-pulse rounded-full bg-rose-500" />
         <h2 className="text-sm font-semibold uppercase tracking-wide text-rose-300">Firing now</h2>
-        <span className="text-xs text-white/40">{alerts.length} active</span>
+        <span className="text-xs text-white/40">{shownAlerts.length} active</span>
       </div>
 
       <div className="space-y-2">
-        {alerts.map((a) => {
+        {shownAlerts.map((a) => {
           const m = sevMeta(a.severity);
           const ev = evidence[a.id];
           const topSvc = ev?.affected_services?.[0];
@@ -241,6 +245,7 @@ function RuleModal({
 
 export default function AlertsPage() {
   const [rules, setRules] = useState<AlertRule[]>([]);
+  const [minutes, setMinutes] = useState(60);
   const [err, setErr] = useState<string | null>(null);
   const [modal, setModal] = useState<{ open: boolean; rule: AlertRule | null }>({ open: false, rule: null });
 
@@ -272,7 +277,12 @@ export default function AlertsPage() {
 
   return (
     <Shell>
-      <FiringAlerts />
+      <div className="mb-4 flex items-center justify-between">
+        <span className="text-xs uppercase tracking-wide text-white/35">Operational view</span>
+        <RangePicker value={minutes} onChange={setMinutes} />
+      </div>
+
+      <FiringAlerts minutes={minutes} />
 
       <div className="mb-5 flex items-start justify-between">
         <div>

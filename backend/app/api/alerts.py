@@ -56,7 +56,7 @@ class RuleOut(BaseModel):
 
 class IncidentOut(BaseModel):
     id: uuid.UUID
-    rule_id: uuid.UUID
+    rule_id: uuid.UUID | None
     rule_name: str
     kind: str
     service: str | None
@@ -436,3 +436,135 @@ def list_anomalies(
         q = q.where(Anomaly.status == status)
     q = q.order_by(Anomaly.last_seen.desc()).limit(limit)
     return db.scalars(q).all()
+
+
+def _owned_anomaly(anomaly_id, user, db):
+    a = db.get(Anomaly, anomaly_id)
+    if a is None or a.organization_id != user.organization_id:
+        raise HTTPException(status_code=404, detail="anomaly not found")
+    return a
+
+
+@router.get("/anomalies/{anomaly_id}", response_model=AnomalyOut)
+def get_anomaly(anomaly_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return _owned_anomaly(anomaly_id, user, db)
+
+
+@router.get("/anomalies/{anomaly_id}/evidence")
+async def anomaly_evidence(
+    anomaly_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    _tenant=Depends(tenant_dependency),
+):
+    """Correlated evidence for an anomaly: affected services, triggering
+    operations, sample failing traces, and the metric trend across the window.
+    Scoped to the anomaly's service and its active window."""
+    a = _owned_anomaly(anomaly_id, user, db)
+    svc = a.service
+    started = a.first_seen
+
+    svc_clause = "AND ServiceName = {svc:String}" if svc else ""
+    params = {"start": started.isoformat()}
+    if svc:
+        params["svc"] = svc
+
+    svc_breakdown_q = f"""
+        SELECT ServiceName AS service,
+               countIf(StatusCode = 'Error') AS errors,
+               count() AS total,
+               round(100 * countIf(StatusCode = 'Error') / count(), 2) AS error_rate,
+               round(quantile(0.95)(Duration) / 1000000, 1) AS p95_ms
+        FROM otel_traces
+        WHERE Timestamp >= parseDateTimeBestEffort({{start:String}})
+          {svc_clause}
+          AND {{tenant_scope}}
+        GROUP BY service
+        HAVING total > 0
+        ORDER BY errors DESC
+        LIMIT 10
+    """
+    triggers_q = f"""
+        SELECT ServiceName AS service,
+               SpanName AS endpoint,
+               StatusMessage AS error,
+               count() AS occurrences,
+               round(quantile(0.95)(Duration) / 1000000, 1) AS p95_ms,
+               max(Timestamp) AS last_seen
+        FROM otel_traces
+        WHERE StatusCode = 'Error'
+          AND Timestamp >= parseDateTimeBestEffort({{start:String}})
+          {svc_clause}
+          AND {{tenant_scope}}
+        GROUP BY service, endpoint, error
+        ORDER BY occurrences DESC
+        LIMIT 10
+    """
+    trace_q = f"""
+        SELECT TraceId AS trace_id, ServiceName AS service, SpanName AS operation,
+               Duration / 1000000 AS duration_ms, Timestamp AS ts
+        FROM otel_traces
+        WHERE StatusCode = 'Error'
+          AND Timestamp >= parseDateTimeBestEffort({{start:String}})
+          {svc_clause}
+          AND {{tenant_scope}}
+        ORDER BY Timestamp DESC
+        LIMIT 10
+    """
+    trend_q = f"""
+        SELECT toStartOfMinute(Timestamp) AS bucket,
+               countIf(StatusCode = 'Error') AS errors, count() AS total,
+               round(quantile(0.95)(Duration) / 1000000, 1) AS p95_ms
+        FROM otel_traces
+        WHERE Timestamp >= parseDateTimeBestEffort({{start:String}})
+          {svc_clause}
+          AND {{tenant_scope}}
+        GROUP BY bucket ORDER BY bucket
+    """
+
+    def rows(q):
+        try:
+            res = ch_query_scoped(q, params, app_namespace=None)
+            cols = res.column_names
+            return [dict(zip(cols, r)) for r in res.result_rows]
+        except Exception:
+            return []
+
+    services = rows(svc_breakdown_q)
+    triggers = rows(triggers_q)
+    traces = rows(trace_q)
+    trend_raw = rows(trend_q)
+
+    if a.metric == "error_rate":
+        trend = [
+            {"bucket": str(t["bucket"]),
+             "value": round(100 * t["errors"] / t["total"], 2) if t["total"] else 0.0}
+            for t in trend_raw
+        ]
+    else:
+        trend = [{"bucket": str(t["bucket"]), "value": float(t["p95_ms"])} for t in trend_raw]
+
+    return {
+        "anomaly_id": str(a.id),
+        "service": svc,
+        "metric": a.metric,
+        "observed": a.observed,
+        "baseline_mean": a.baseline_mean,
+        "z_score": a.z_score,
+        "affected_services": [
+            {"service": sv["service"], "errors": sv["errors"], "total": sv["total"],
+             "error_rate": float(sv["error_rate"]), "p95_ms": float(sv["p95_ms"])}
+            for sv in services
+        ],
+        "triggers": [
+            {"service": tg["service"], "endpoint": tg["endpoint"], "error": tg["error"],
+             "occurrences": tg["occurrences"], "p95_ms": float(tg["p95_ms"]), "last_seen": str(tg["last_seen"])}
+            for tg in triggers
+        ],
+        "sample_traces": [
+            {"trace_id": t["trace_id"], "service": t["service"], "operation": t["operation"],
+             "duration_ms": round(float(t["duration_ms"]), 1), "ts": str(t["ts"])}
+            for t in traces
+        ],
+        "trend": trend,
+    }
