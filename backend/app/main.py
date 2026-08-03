@@ -23,12 +23,15 @@ async def lifespan(app: FastAPI):
     import asyncio
 
     from app.services.evaluator import evaluator_loop
+    from app.services.detector import detector_loop
 
     task = asyncio.create_task(evaluator_loop())
+    detector_task = asyncio.create_task(detector_loop())
     try:
         yield
     finally:
         task.cancel()
+        detector_task.cancel()
 
 
 app = FastAPI(

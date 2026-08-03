@@ -44,8 +44,8 @@ class Incident(Base):
     organization_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("organizations.id"), index=True
     )
-    rule_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("alert_rules.id"), index=True
+    rule_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("alert_rules.id"), index=True, nullable=True
     )
     rule_name: Mapped[str] = mapped_column(String(255))
     kind: Mapped[str] = mapped_column(String(32))
