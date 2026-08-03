@@ -1,7 +1,7 @@
 """Alert rules and incidents API (org-scoped, auth-required)."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -421,6 +421,7 @@ class AnomalyOut(BaseModel):
     last_seen: datetime
     resolved_at: datetime | None
     promoted_incident_id: uuid.UUID | None
+    resolution: str
     model_config = {"from_attributes": True}
 
 
@@ -568,3 +569,83 @@ async def anomaly_evidence(
         ],
         "trend": trend,
     }
+
+
+SUPPRESS_MINUTES = 10  # after a manual resolve/dismiss, detector won't reopen this (service,metric) for this long
+
+
+@router.post("/anomalies/{anomaly_id}/resolve", response_model=AnomalyOut)
+def resolve_anomaly(anomaly_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Manually resolve an anomaly. Applies a suppression cooldown so the
+    detector will not immediately reopen it."""
+    a = _owned_anomaly(anomaly_id, user, db)
+    now = datetime.now(timezone.utc)
+    a.status = "resolved"
+    a.resolution = "manual"
+    a.resolved_at = now
+    a.suppressed_until = now + timedelta(minutes=SUPPRESS_MINUTES)
+    if a.promoted_incident_id:
+        inc = db.get(Incident, a.promoted_incident_id)
+        if inc and inc.status == "firing":
+            inc.status = "resolved"
+            inc.resolved_at = now
+    db.commit()
+    db.refresh(a)
+    return a
+
+
+@router.post("/anomalies/{anomaly_id}/dismiss", response_model=AnomalyOut)
+def dismiss_anomaly(anomaly_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Dismiss an anomaly as a false positive. Same mechanics as resolve, but
+    labeled 'dismissed' so real resolutions can be told apart from noise."""
+    a = _owned_anomaly(anomaly_id, user, db)
+    now = datetime.now(timezone.utc)
+    a.status = "resolved"
+    a.resolution = "dismissed"
+    a.resolved_at = now
+    a.suppressed_until = now + timedelta(minutes=SUPPRESS_MINUTES)
+    if a.promoted_incident_id:
+        inc = db.get(Incident, a.promoted_incident_id)
+        if inc and inc.status == "firing":
+            inc.status = "resolved"
+            inc.resolved_at = now
+    db.commit()
+    db.refresh(a)
+    return a
+
+
+@router.post("/anomalies/{anomaly_id}/escalate", response_model=AnomalyOut)
+def escalate_anomaly(anomaly_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Manually promote an active anomaly to an incident now, without waiting
+    for the sustained-hits threshold."""
+    a = _owned_anomaly(anomaly_id, user, db)
+    if a.promoted_incident_id:
+        raise HTTPException(status_code=409, detail="anomaly already promoted to an incident")
+    if a.status != "active":
+        raise HTTPException(status_code=409, detail="only active anomalies can be escalated")
+    metric_label = "error rate" if a.metric == "error_rate" else "p95 latency"
+    unit = "%" if a.metric == "error_rate" else "ms"
+    summary = (
+        f"anomalous {metric_label} on {a.service}: "
+        f"{a.observed}{unit} vs baseline {round(a.baseline_mean, 2)}{unit} "
+        f"(z={round(a.z_score, 1)}) [manually escalated]"
+    )
+    inc = Incident(
+        organization_id=user.organization_id,
+        rule_id=None,
+        rule_name=f"Anomaly: {metric_label} on {a.service}",
+        kind="anomaly",
+        service=a.service,
+        severity=a.severity,
+        status="firing",
+        observed_value=a.observed,
+        threshold=round(a.baseline_mean, 3),
+        summary=summary,
+        started_at=datetime.now(timezone.utc),
+    )
+    db.add(inc)
+    db.flush()
+    a.promoted_incident_id = inc.id
+    db.commit()
+    db.refresh(a)
+    return a

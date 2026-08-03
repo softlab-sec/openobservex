@@ -201,6 +201,19 @@ def _process(db, org_id, service: str, metric: str) -> None:
             if existing.consecutive_hits >= PROMOTE_AFTER and existing.promoted_incident_id is None:
                 _promote_to_incident(db, org_id, existing)
         else:
+            # SUPPRESSION: if this (service, metric) was manually resolved/dismissed
+            # recently, honor the cooldown and do not reopen it yet.
+            suppressed = db.scalar(
+                select(Anomaly).where(
+                    Anomaly.organization_id == org_id,
+                    Anomaly.service == service,
+                    Anomaly.metric == metric,
+                    Anomaly.suppressed_until.is_not(None),
+                    Anomaly.suppressed_until > now,
+                ).order_by(Anomaly.suppressed_until.desc())
+            )
+            if suppressed is not None:
+                return
             db.add(Anomaly(
                 organization_id=org_id,
                 service=service,

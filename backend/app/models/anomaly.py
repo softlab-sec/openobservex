@@ -48,6 +48,11 @@ class Anomaly(Base):
     last_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # how it resolved: auto (detector) | manual (human resolved) | dismissed (false positive)
+    resolution: Mapped[str] = mapped_column(String(16), default="auto")
+    # cooldown: while set to a future time, the detector will not reopen this (service, metric)
+    suppressed_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     # link to the incident this anomaly was promoted to (if any)
     promoted_incident_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("incidents.id"), nullable=True

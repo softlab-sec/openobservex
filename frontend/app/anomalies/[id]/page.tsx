@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { use, useCallback, useEffect, useState } from "react";
 import Shell from "@/components/Shell";
-import { apiGet, type AnomalyRow, type AnomalyEvidence } from "@/lib/api";
+import { apiGet, apiSend, type AnomalyRow, type AnomalyEvidence } from "@/lib/api";
 import { sevMeta, since, duration } from "@/lib/severity";
 
 const METRIC_LABEL: Record<string, string> = {
@@ -20,6 +20,7 @@ export default function AnomalyDetailPage({ params }: { params: Promise<{ id: st
   const [a, setA] = useState<AnomalyRow | null>(null);
   const [ev, setEv] = useState<AnomalyEvidence | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
 
   const load = useCallback(() => {
     apiGet<AnomalyRow>(`/api/v1/alerts/anomalies/${id}`)
@@ -29,6 +30,18 @@ export default function AnomalyDetailPage({ params }: { params: Promise<{ id: st
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
+
+  async function act(action: "resolve" | "dismiss" | "escalate") {
+    setBusy(action);
+    try {
+      await apiSend(`/api/v1/alerts/anomalies/${id}/${action}`, "POST");
+      load();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
 
   if (err) return <Shell><p className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-300">{err}</p></Shell>;
   if (!a) return <Shell><p className="text-sm text-white/40">Loading anomaly…</p></Shell>;
@@ -75,6 +88,34 @@ export default function AnomalyDetailPage({ params }: { params: Promise<{ id: st
           <Fact label={active ? "Active for" : "Lasted"} value={active ? since(a.first_seen) : duration(a.first_seen, a.resolved_at)} />
         </div>
       </div>
+
+      {(active || !a.promoted_incident_id) && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {active && (
+            <>
+              <button onClick={() => act("resolve")} disabled={busy !== null}
+                className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-1.5 text-sm text-emerald-300 transition hover:bg-emerald-500/20 disabled:opacity-50">
+                {busy === "resolve" ? "Resolving…" : "Resolve"}
+              </button>
+              <button onClick={() => act("dismiss")} disabled={busy !== null}
+                className="rounded-lg border border-white/15 bg-white/[0.03] px-3 py-1.5 text-sm text-white/70 transition hover:bg-white/[0.08] disabled:opacity-50">
+                {busy === "dismiss" ? "Dismissing…" : "Dismiss as false positive"}
+              </button>
+              {!a.promoted_incident_id && (
+                <button onClick={() => act("escalate")} disabled={busy !== null}
+                  className="rounded-lg border border-rose-400/30 bg-rose-500/10 px-3 py-1.5 text-sm text-rose-300 transition hover:bg-rose-500/20 disabled:opacity-50">
+                  {busy === "escalate" ? "Escalating…" : "Escalate to incident"}
+                </button>
+              )}
+            </>
+          )}
+          {!active && a.resolution !== "auto" && (
+            <span className="rounded-full bg-white/[0.06] px-2.5 py-0.5 text-xs text-white/50">
+              {a.resolution === "dismissed" ? "Dismissed as false positive" : "Manually resolved"}
+            </span>
+          )}
+        </div>
+      )}
 
       {a.promoted_incident_id && (
         <Link href={`/incidents/${a.promoted_incident_id}`}

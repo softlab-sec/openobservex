@@ -448,6 +448,7 @@ export type AnomalyRow = {
   last_seen: string;
   resolved_at: string | null;
   promoted_incident_id: string | null;
+  resolution: string;
 };
 
 export type AnomalyTrigger = {

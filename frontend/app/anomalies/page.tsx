@@ -16,7 +16,7 @@ function fmtVal(v: number, metric: string): string {
   return metric === "error_rate" ? `${v.toFixed(2)}%` : `${v.toFixed(0)} ms`;
 }
 
-type Filter = "active" | "all" | "resolved";
+type Filter = "active" | "all" | "resolved" | "critical" | "promoted";
 
 export default function AnomaliesPage() {
   const [items, setItems] = useState<AnomalyRow[]>([]);
@@ -51,6 +51,8 @@ export default function AnomaliesPage() {
     let list = items.filter(withinWindow);
     if (filter === "active") list = list.filter((a) => a.status === "active");
     else if (filter === "resolved") list = list.filter((a) => a.status === "resolved");
+    else if (filter === "critical") list = list.filter((a) => a.severity === "critical");
+    else if (filter === "promoted") list = list.filter((a) => a.promoted_incident_id);
     return [...list].sort((a, b) => {
       if (a.status !== b.status) return a.status === "active" ? -1 : 1;
       return Math.abs(b.z_score) - Math.abs(a.z_score);
@@ -71,11 +73,11 @@ export default function AnomaliesPage() {
       </div>
 
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-5">
-        <Tile label="Total" value={counts.total} tone="neutral" />
-        <Tile label="Active" value={counts.active} tone="active" />
-        <Tile label="Resolved" value={counts.resolved} tone="resolved" />
-        <Tile label="Critical" value={counts.critical} tone="critical" />
-        <Tile label="Promoted" value={counts.promoted} tone="info" />
+        <Tile label="Total" value={counts.total} tone="neutral" active={filter === "all"} onClick={() => setFilter("all")} />
+        <Tile label="Active" value={counts.active} tone="active" active={filter === "active"} onClick={() => setFilter("active")} />
+        <Tile label="Resolved" value={counts.resolved} tone="resolved" active={filter === "resolved"} onClick={() => setFilter("resolved")} />
+        <Tile label="Critical" value={counts.critical} tone="critical" active={filter === "critical"} onClick={() => setFilter("critical")} />
+        <Tile label="Promoted" value={counts.promoted} tone="info" active={filter === "promoted"} onClick={() => setFilter("promoted")} />
       </div>
 
       {err && <p className="mb-4 rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-300">{err}</p>}
@@ -149,7 +151,11 @@ export default function AnomaliesPage() {
   );
 }
 
-function Tile({ label, value, tone }: { label: string; value: number; tone: "critical" | "info" | "neutral" | "active" | "resolved" }) {
+function Tile({ label, value, tone, active, onClick }: {
+  label: string; value: number;
+  tone: "critical" | "info" | "neutral" | "active" | "resolved";
+  active: boolean; onClick: () => void;
+}) {
   const toneCls =
     tone === "critical" ? "border-rose-500/30 text-rose-300"
     : tone === "info" ? "border-sky-400/30 text-sky-300"
@@ -157,9 +163,10 @@ function Tile({ label, value, tone }: { label: string; value: number; tone: "cri
     : tone === "resolved" ? "border-emerald-400/30 text-emerald-300"
     : "border-white/15 text-white/70";
   return (
-    <div className={`rounded-xl border bg-white/[0.02] px-4 py-3 ${toneCls}`}>
+    <button onClick={onClick}
+      className={`rounded-xl border bg-white/[0.02] px-4 py-3 text-left transition hover:bg-white/[0.05] ${toneCls} ${active ? "ring-2 ring-white/30" : ""}`}>
       <div className="text-2xl font-semibold tabular-nums">{value}</div>
       <div className="mt-0.5 text-xs text-white/45">{label}</div>
-    </div>
+    </button>
   );
 }

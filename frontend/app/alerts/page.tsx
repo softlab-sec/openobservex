@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import Shell, { usePoll } from "@/components/Shell";
 import { sevMeta, since } from "@/lib/severity";
 import { RangePicker } from "@/components/ui";
@@ -29,7 +30,7 @@ const EMPTY: AlertRuleInput = {
   webhook_urls: null, channel_ids: null,
 };
 
-function FiringAlerts({ minutes }: { minutes: number }) {
+function FiringAlerts({ minutes, filter }: { minutes: number; filter: "all" | "info" | "warning" | "critical" | "ack" }) {
   const [alerts, setAlerts] = useState<IncidentRow[]>([]);
   const [evidence, setEvidence] = useState<Record<string, IncidentEvidence>>({});
   const [busy, setBusy] = useState<string | null>(null);
@@ -55,7 +56,13 @@ function FiringAlerts({ minutes }: { minutes: number }) {
   }
 
   const cutoff = Date.now() - minutes * 60_000;
-  const shownAlerts = alerts.filter((a) => new Date(a.started_at).getTime() >= cutoff);
+  const shownAlerts = alerts
+    .filter((a) => new Date(a.started_at).getTime() >= cutoff)
+    .filter((a) => {
+      if (filter === "all") return true;
+      if (filter === "ack") return a.acknowledged_at != null;
+      return a.severity === filter;
+    });
 
   if (shownAlerts.length === 0) return null;
 
@@ -245,11 +252,15 @@ function RuleModal({
 
 export default function AlertsPage() {
   const [rules, setRules] = useState<AlertRule[]>([]);
+  const [incidents, setIncidents] = useState<IncidentRow[]>([]);
   const [minutes, setMinutes] = useState(60);
+  const [alertFilter, setAlertFilter] = useState<"all" | "info" | "warning" | "critical" | "ack">("all");
   const [err, setErr] = useState<string | null>(null);
   const [modal, setModal] = useState<{ open: boolean; rule: AlertRule | null }>({ open: false, rule: null });
 
   const load = useCallback(() => {
+    apiGet<IncidentRow[]>("/api/v1/alerts/incidents?limit=200")
+      .then(setIncidents).catch(() => {});
     return apiGet<AlertRule[]>("/api/v1/alerts/rules")
       .then((r) => { setRules(r); setErr(null); })
       .catch((e: Error) => setErr(e.message));
@@ -269,6 +280,24 @@ export default function AlertsPage() {
   const firingCount = rules.filter((r) => r.is_firing).length;
   const enabledCount = rules.filter((r) => r.enabled).length;
 
+  const incWindow = (i: IncidentRow) => {
+    if (i.status === "firing") return true;
+    const cutoff = Date.now() - minutes * 60_000;
+    const st = new Date(i.started_at).getTime();
+    const rs = i.resolved_at ? new Date(i.resolved_at).getTime() : 0;
+    return st >= cutoff || rs >= cutoff;
+  };
+  const winInc = incidents.filter(incWindow);
+  const firingInc = winInc.filter((i) => i.status === "firing");
+  const sum = {
+    total: winInc.length,
+    info: firingInc.filter((i) => i.severity === "info").length,
+    warning: firingInc.filter((i) => i.severity === "warning").length,
+    critical: firingInc.filter((i) => i.severity === "critical").length,
+    acknowledged: firingInc.filter((i) => i.acknowledged_at).length,
+    resolved: winInc.filter((i) => i.status === "resolved").length,
+  };
+
   function conditionText(r: AlertRule): string {
     if (r.kind === "service_down") return "Service is down";
     const unit = r.kind === "latency" ? ` ms (p${r.percentile})` : (KIND_UNIT[r.kind] ?? "");
@@ -282,7 +311,16 @@ export default function AlertsPage() {
         <RangePicker value={minutes} onChange={setMinutes} />
       </div>
 
-      <FiringAlerts minutes={minutes} />
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-6">
+        <AlertStat label="Total" value={sum.total} tone="neutral" active={alertFilter === "all"} onClick={() => setAlertFilter("all")} />
+        <AlertStat label="Info" value={sum.info} tone="info" active={alertFilter === "info"} onClick={() => setAlertFilter("info")} />
+        <AlertStat label="Warning" value={sum.warning} tone="warning" active={alertFilter === "warning"} onClick={() => setAlertFilter("warning")} />
+        <AlertStat label="Critical" value={sum.critical} tone="critical" active={alertFilter === "critical"} onClick={() => setAlertFilter("critical")} />
+        <AlertStat label="Acknowledged" value={sum.acknowledged} tone="ack" active={alertFilter === "ack"} onClick={() => setAlertFilter("ack")} />
+        <AlertStat label="Resolved" value={sum.resolved} tone="resolved" href="/incidents" />
+      </div>
+
+      <FiringAlerts minutes={minutes} filter={alertFilter} />
 
       <div className="mb-5 flex items-start justify-between">
         <div>
@@ -369,4 +407,27 @@ export default function AlertsPage() {
       )}
     </Shell>
   );
+}
+
+function AlertStat({ label, value, tone, active, onClick, href }: {
+  label: string; value: number;
+  tone: "critical" | "warning" | "info" | "ack" | "resolved" | "neutral";
+  active?: boolean; onClick?: () => void; href?: string;
+}) {
+  const toneCls =
+    tone === "critical" ? "border-rose-500/30 text-rose-300"
+    : tone === "warning" ? "border-amber-400/30 text-amber-300"
+    : tone === "info" ? "border-sky-400/30 text-sky-300"
+    : tone === "ack" ? "border-violet-400/30 text-violet-300"
+    : tone === "resolved" ? "border-emerald-400/30 text-emerald-300"
+    : "border-white/15 text-white/70";
+  const cls = `block rounded-xl border bg-white/[0.02] px-4 py-3 text-left transition hover:bg-white/[0.05] ${toneCls} ${active ? "ring-2 ring-white/30" : ""}`;
+  const inner = (
+    <>
+      <div className="text-2xl font-semibold tabular-nums">{value}</div>
+      <div className="mt-0.5 text-xs text-white/45">{label}</div>
+    </>
+  );
+  if (href) return <Link href={href} className={cls}>{inner}</Link>;
+  return <button onClick={onClick} className={cls}>{inner}</button>;
 }
