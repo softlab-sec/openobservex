@@ -125,6 +125,7 @@ def _fire(db, rule: AlertRule, value: float, summary: str) -> None:
         organization_id=rule.organization_id,
         rule_id=rule.id,
         rule_name=rule.name,
+        severity=rule.severity,
         kind=rule.kind,
         service=rule.service,
         status="firing",
@@ -133,6 +134,10 @@ def _fire(db, rule: AlertRule, value: float, summary: str) -> None:
         summary=summary,
     )
     db.add(inc)
+    db.commit()
+
+    from app.models import IncidentEvent
+    db.add(IncidentEvent(incident_id=inc.id, kind="fired", actor=None, detail=summary))
     db.commit()
 
     text = f":rotating_light: FIRING: {rule.name}\n{summary}"

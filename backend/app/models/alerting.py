@@ -28,6 +28,7 @@ class AlertRule(Base):
     # minimum sample size before a rule can fire (avoids noise on tiny traffic)
     min_samples: Mapped[int] = mapped_column(Integer, default=20)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    severity: Mapped[str] = mapped_column(String(16), default="warning", server_default="warning")
     # comma-separated webhook targets
     webhook_urls: Mapped[str | None] = mapped_column(Text, nullable=True)
     channel_ids: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -51,6 +52,7 @@ class Incident(Base):
     service: Mapped[str | None] = mapped_column(String(128), nullable=True)
     # "firing" or "resolved"
     status: Mapped[str] = mapped_column(String(16), default="firing", index=True)
+    severity: Mapped[str] = mapped_column(String(16), default="warning", server_default="warning")
     observed_value: Mapped[float] = mapped_column(Float)
     threshold: Mapped[float] = mapped_column(Float)
     summary: Mapped[str] = mapped_column(Text)
@@ -59,4 +61,26 @@ class Incident(Base):
     )
     resolved_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+    acknowledged_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    acknowledged_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    assigned_to: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+
+class IncidentEvent(Base):
+    """One entry in an incident's timeline: fired, acknowledged, assigned, noted, resolved."""
+
+    __tablename__ = "incident_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    incident_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("incidents.id"), index=True
+    )
+    kind: Mapped[str] = mapped_column(String(24))
+    actor: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
     )

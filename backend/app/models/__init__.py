@@ -1,8 +1,8 @@
 from app.models.organization import Organization
-from app.models.alerting import AlertRule, Incident
+from app.models.alerting import AlertRule, Incident, IncidentEvent
 from app.models.application import Application
 from app.models.api_key import ApiKey
 from app.models.channel import NotificationChannel
 from app.models.user import User
 
-__all__ = ["Organization", "User", "AlertRule", "Incident", "Application", "ApiKey", "NotificationChannel"]
+__all__ = ["Organization", "User", "AlertRule", "Incident", "IncidentEvent", "Application", "ApiKey", "NotificationChannel"]

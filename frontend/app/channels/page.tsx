@@ -75,11 +75,11 @@ export default function ChannelsPage() {
     <Shell>
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Notification channels</h1>
+          <h1 className="text-xl font-semibold tracking-tight">Notifications</h1>
           <p className="text-sm text-white/40">Where alerts are delivered. Configure once, then attach to alert rules.</p>
         </div>
         <button onClick={openNew} className="rounded-lg border border-violet-400/40 bg-violet-500/15 px-3 py-1.5 text-sm text-violet-200 hover:bg-violet-500/25">
-          Add channel
+          Add notification
         </button>
       </div>
 
@@ -160,7 +160,7 @@ export default function ChannelsPage() {
             </div>
           </div>
         ))}
-        {channels.length === 0 && <p className="text-sm text-white/40">No channels yet. Add one to start receiving alerts.</p>}
+        {channels.length === 0 && <p className="text-sm text-white/40">No notifications yet. Add one to start receiving alerts.</p>}
       </div>
     </Shell>
   );

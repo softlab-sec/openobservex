@@ -1,86 +1,155 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import Link from "next/link";
+import { useMemo, useState } from "react";
 import Shell, { usePoll } from "@/components/Shell";
-import { Card } from "@/components/ui";
 import { apiGet, type IncidentRow } from "@/lib/api";
+import { sevMeta, sevRank, since, duration } from "@/lib/severity";
 
 const KIND_LABEL: Record<string, string> = {
   error_rate: "Error rate",
-  latency: "Latency",
-  log_spike: "Log spike",
-  service_down: "Service down",
+  latency_p95: "Latency p95",
+  latency_p99: "Latency p99",
+  throughput: "Throughput",
 };
 
-function ago(iso: string): string {
-  const d = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (d < 60) return `${Math.floor(d)}s ago`;
-  if (d < 3600) return `${Math.floor(d / 60)}m ago`;
-  if (d < 86400) return `${Math.floor(d / 3600)}h ago`;
-  return `${Math.floor(d / 86400)}d ago`;
-}
-function duration(a: string, b: string | null): string {
-  const end = b ? new Date(b).getTime() : Date.now();
-  const s = (end - new Date(a).getTime()) / 1000;
-  if (s < 60) return `${Math.floor(s)}s`;
-  if (s < 3600) return `${Math.floor(s / 60)}m`;
-  return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
-}
-
-function IncidentCard({ inc }: { inc: IncidentRow }) {
-  const firing = inc.status === "firing";
-  return (
-    <div className={`rounded-xl border p-4 ${firing ? "border-red-400/40 bg-red-500/[0.07]" : "border-white/10 bg-white/[0.02]"}`}>
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className={`h-2 w-2 rounded-full ${firing ? "animate-pulse bg-red-400" : "bg-emerald-400"}`} />
-            <span className="font-medium text-white/90">{inc.rule_name}</span>
-            <span className="rounded bg-white/10 px-1.5 py-0.5 text-[11px] text-white/50">{KIND_LABEL[inc.kind] ?? inc.kind}</span>
-            {inc.service && <span className="text-xs text-white/45">{inc.service}</span>}
-          </div>
-          <p className="mt-1 text-sm text-white/70">{inc.summary}</p>
-        </div>
-        <div className="shrink-0 text-right">
-          <div className={`rounded-full px-2 py-0.5 text-xs ${firing ? "bg-red-500/15 text-red-300" : "bg-emerald-500/15 text-emerald-300"}`}>{inc.status}</div>
-          <div className="mt-1 text-[11px] text-white/35">{firing ? ago(inc.started_at) : `lasted ${duration(inc.started_at, inc.resolved_at)}`}</div>
-        </div>
-      </div>
-    </div>
-  );
-}
+type Filter = "active" | "all" | "resolved";
 
 export default function IncidentsPage() {
   const [items, setItems] = useState<IncidentRow[]>([]);
-  const [tab, setTab] = useState<"active" | "history">("active");
   const [err, setErr] = useState<string | null>(null);
-  const load = useCallback(() => apiGet<IncidentRow[]>("/api/v1/alerts/incidents?limit=200").then((r) => { setItems(r); setErr(null); }).catch((e: Error) => setErr(e.message)), []);
+  const [filter, setFilter] = useState<Filter>("active");
+  const [sev, setSev] = useState<"all" | "critical" | "warning" | "info">("all");
+
+  const load = () =>
+    apiGet<IncidentRow[]>("/api/v1/alerts/incidents?limit=200")
+      .then((r) => { setItems(r); setErr(null); })
+      .catch((e: Error) => setErr(e.message));
   usePoll(load, [], 10000);
-  const firing = useMemo(() => items.filter((i) => i.status === "firing"), [items]);
-  const resolved = useMemo(() => items.filter((i) => i.status === "resolved"), [items]);
+
+  const firing = items.filter((i) => i.status === "firing");
+  const counts = {
+    critical: firing.filter((i) => i.severity === "critical").length,
+    warning: firing.filter((i) => i.severity === "warning").length,
+    info: firing.filter((i) => i.severity === "info").length,
+    unack: firing.filter((i) => !i.acknowledged_at).length,
+  };
+
+  const shown = useMemo(() => {
+    let list = items;
+    if (filter === "active") list = list.filter((i) => i.status === "firing");
+    else if (filter === "resolved") list = list.filter((i) => i.status === "resolved");
+    if (sev !== "all") list = list.filter((i) => i.severity === sev);
+    return [...list].sort((a, b) => {
+      if (a.status !== b.status) return a.status === "firing" ? -1 : 1;
+      if (a.severity !== b.severity) return sevRank(a.severity) - sevRank(b.severity);
+      return new Date(b.started_at).getTime() - new Date(a.started_at).getTime();
+    });
+  }, [items, filter, sev]);
+
   return (
     <Shell>
-      <div className="mb-4">
+      <div className="mb-5">
         <h1 className="text-xl font-semibold tracking-tight">Incidents</h1>
-        <p className="text-sm text-white/40">{firing.length} firing now · {resolved.length} resolved</p>
+        <p className="text-sm text-white/40">Live problems across your services, most severe first.</p>
       </div>
-      {err && <p className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{err}</p>}
-      {firing.length > 0 && (
-        <div className="mb-6">
-          <div className="mb-2 text-xs uppercase tracking-wider text-red-300/70">Active now</div>
-          <div className="space-y-2">{firing.map((i) => <IncidentCard key={i.id} inc={i} />)}</div>
+
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <SummaryTile label="Critical" value={counts.critical} tone="critical" onClick={() => { setFilter("active"); setSev("critical"); }} />
+        <SummaryTile label="Warning" value={counts.warning} tone="warning" onClick={() => { setFilter("active"); setSev("warning"); }} />
+        <SummaryTile label="Info" value={counts.info} tone="info" onClick={() => { setFilter("active"); setSev("info"); }} />
+        <SummaryTile label="Unacknowledged" value={counts.unack} tone="neutral" onClick={() => { setFilter("active"); setSev("all"); }} />
+      </div>
+
+      {err && <p className="mb-4 rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-300">{err}</p>}
+
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <div className="flex rounded-lg border border-white/10 p-0.5 text-xs">
+          {(["active", "all", "resolved"] as Filter[]).map((f) => (
+            <button key={f} onClick={() => setFilter(f)}
+              className={`rounded-md px-3 py-1 capitalize transition ${filter === f ? "bg-white/10 text-white" : "text-white/50 hover:text-white"}`}>
+              {f}
+            </button>
+          ))}
         </div>
-      )}
-      <div className="mb-3 flex gap-2">
-        <button onClick={() => setTab("active")} className={`rounded-lg px-3 py-1.5 text-sm ${tab === "active" ? "bg-white/10 text-white" : "text-white/50 hover:text-white"}`}>Active ({firing.length})</button>
-        <button onClick={() => setTab("history")} className={`rounded-lg px-3 py-1.5 text-sm ${tab === "history" ? "bg-white/10 text-white" : "text-white/50 hover:text-white"}`}>History ({resolved.length})</button>
+        <div className="flex rounded-lg border border-white/10 p-0.5 text-xs">
+          {(["all", "critical", "warning", "info"] as const).map((s) => (
+            <button key={s} onClick={() => setSev(s)}
+              className={`rounded-md px-3 py-1 capitalize transition ${sev === s ? "bg-white/10 text-white" : "text-white/50 hover:text-white"}`}>
+              {s}
+            </button>
+          ))}
+        </div>
+        <span className="ml-auto text-xs text-white/40">{shown.length} shown</span>
       </div>
-      <div className="space-y-2">
-        {(tab === "active" ? firing : resolved).map((i) => <IncidentCard key={i.id} inc={i} />)}
-        {(tab === "active" ? firing : resolved).length === 0 && (
-          <Card><p className="py-8 text-center text-sm text-white/30">{tab === "active" ? "Nothing firing. All clear." : "No resolved incidents yet."}</p></Card>
+
+      <div className="overflow-hidden rounded-xl border border-white/10">
+        {shown.map((i) => {
+          const m = sevMeta(i.severity);
+          const resolved = i.status === "resolved";
+          return (
+            <Link key={i.id} href={`/incidents/${i.id}`}
+              className="group flex items-stretch gap-0 border-b border-white/[0.06] last:border-0 hover:bg-white/[0.03]">
+              <span className={`w-1 shrink-0 ${resolved ? "bg-white/10" : m.bar}`} />
+              <div className="flex flex-1 items-center gap-4 px-4 py-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${m.bg} ${m.text}`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${m.dot}`} />{m.label}
+                    </span>
+                    <span className="truncate font-medium text-white/90">{i.rule_name}</span>
+                    <span className="rounded bg-white/[0.08] px-1.5 py-0.5 text-[10px] text-white/45">{KIND_LABEL[i.kind] ?? i.kind}</span>
+                    {i.service && <span className="truncate text-xs text-white/40">{i.service}</span>}
+                  </div>
+                  <p className="mt-1 truncate text-sm text-white/55">{i.summary}</p>
+                </div>
+
+                <div className="hidden w-28 shrink-0 text-right sm:block">
+                  {resolved ? (
+                    <span className="text-xs text-emerald-300/80">resolved</span>
+                  ) : i.acknowledged_at ? (
+                    <span className="text-xs text-amber-300">acknowledged</span>
+                  ) : (
+                    <span className="text-xs text-rose-300">unacknowledged</span>
+                  )}
+                  {i.assigned_to && <div className="mt-0.5 truncate text-[11px] text-white/35">{i.assigned_to}</div>}
+                </div>
+
+                <div className="w-20 shrink-0 text-right">
+                  <div className="text-xs text-white/60">{resolved ? duration(i.started_at, i.resolved_at) : since(i.started_at)}</div>
+                  <div className="text-[11px] text-white/30">{resolved ? "duration" : "ago"}</div>
+                </div>
+
+                <svg className="h-4 w-4 shrink-0 text-white/20 group-hover:text-white/50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M9 6l6 6-6 6" />
+                </svg>
+              </div>
+            </Link>
+          );
+        })}
+        {shown.length === 0 && (
+          <div className="px-4 py-10 text-center text-sm text-white/40">
+            {filter === "active" ? "No active incidents. All clear." : "No incidents match this filter."}
+          </div>
         )}
       </div>
     </Shell>
+  );
+}
+
+function SummaryTile({ label, value, tone, onClick }: {
+  label: string; value: number; tone: "critical" | "warning" | "info" | "neutral"; onClick: () => void;
+}) {
+  const toneCls =
+    tone === "critical" ? "border-rose-500/30 text-rose-300"
+    : tone === "warning" ? "border-amber-400/30 text-amber-300"
+    : tone === "info" ? "border-sky-400/30 text-sky-300"
+    : "border-white/15 text-white/70";
+  return (
+    <button onClick={onClick}
+      className={`rounded-xl border bg-white/[0.02] px-4 py-3 text-left transition hover:bg-white/[0.05] ${toneCls}`}>
+      <div className="text-2xl font-semibold tabular-nums">{value}</div>
+      <div className="mt-0.5 text-xs text-white/45">{label}</div>
+    </button>
   );
 }

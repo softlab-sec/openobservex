@@ -344,3 +344,82 @@ export type NotificationChannel = {
   enabled: boolean;
   created_at: string;
 };
+
+export type IncidentRow = {
+  id: string;
+  rule_id: string;
+  rule_name: string;
+  kind: string;
+  service: string | null;
+  status: "firing" | "resolved";
+  severity: "critical" | "warning" | "info";
+  observed_value: number;
+  threshold: number;
+  summary: string;
+  started_at: string;
+  resolved_at: string | null;
+  acknowledged_at: string | null;
+  acknowledged_by: string | null;
+  assigned_to: string | null;
+};
+
+export type IncidentEvent = {
+  id: string;
+  kind: string;
+  actor: string | null;
+  detail: string | null;
+  created_at: string;
+};
+
+export type AlertRule = {
+  id: string;
+  name: string;
+  kind: "error_rate" | "latency" | "log_spike" | "service_down";
+  service: string | null;
+  threshold: number;
+  percentile: number;
+  for_minutes: number;
+  min_samples: number;
+  enabled: boolean;
+  severity: "critical" | "warning" | "info";
+  webhook_urls: string | null;
+  channel_ids: string | null;
+  created_at: string;
+  is_firing?: boolean;
+  last_fired_at?: string | null;
+  incident_count?: number;
+};
+
+export type AlertRuleInput = Omit<AlertRule, "id" | "created_at" | "is_firing" | "last_fired_at" | "incident_count">;
+
+export type AffectedService = {
+  service: string;
+  errors: number;
+  total: number;
+  error_rate: number;
+  p95_ms: number;
+};
+export type SampleTrace = {
+  trace_id: string;
+  service: string;
+  operation: string;
+  duration_ms: number;
+  ts: string;
+};
+export type TrendPoint = {
+  bucket: string;
+  error_rate: number;
+  errors: number;
+  total: number;
+};
+export type IncidentEvidence = {
+  incident_id: string;
+  service: string | null;
+  observed_value: number;
+  threshold: number;
+  kind: string;
+  affected_services: AffectedService[];
+  error_patterns: ErrorPattern[];
+  sample_traces: SampleTrace[];
+  trend: TrendPoint[];
+};
