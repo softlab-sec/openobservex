@@ -527,9 +527,11 @@ def _anomaly_summary(a, services, triggers):
 
 def _anomaly_analysis(a, services, triggers, traces):
     """Deterministic RCA-style analysis from evidence. No AI, no faked numbers.
-    Confidence is computed from how concentrated the failure signal is."""
+    Confidence is qualitative (Low/Medium/High), derived from how concentrated
+    the failure signal is."""
     metric = a.metric
     unit = "%" if metric == "error_rate" else "ms"
+    metric_label = "Error rate" if metric == "error_rate" else "p95 latency"
 
     n_services = len(services)
     n_ops = len(triggers)
@@ -545,6 +547,7 @@ def _anomaly_analysis(a, services, triggers, traces):
     else:
         user_impact = "Low"
 
+    # dominant operation + likely cause
     likely_cause = "Undetermined"
     top = triggers[0] if triggers else None
     if top:
@@ -553,12 +556,33 @@ def _anomaly_analysis(a, services, triggers, traces):
         else:
             likely_cause = f"Slow {top['endpoint']} (p95 {round(float(top['p95_ms']))}ms)"
 
+    # concentration -> qualitative confidence
     total_trigger = sum(int(t.get("occurrences", 0)) for t in triggers) or 1
     top_share = (int(top["occurrences"]) / total_trigger) if top else 0.0
     locality = 1.0 if n_services <= 1 else 0.7
     strength = min(1.0, abs(a.z_score) / 10.0)
-    confidence = round(min(0.99, 0.35 + 0.4 * top_share + 0.15 * locality + 0.1 * strength) * 100)
+    score = 0.35 + 0.4 * top_share + 0.15 * locality + 0.1 * strength
+    if score >= 0.8:
+        confidence = "High"
+    elif score >= 0.6:
+        confidence = "Medium"
+    else:
+        confidence = "Low"
 
+    # contribution percentages per operation
+    contributions = []
+    for tg in triggers[:8]:
+        share = round(int(tg.get("occurrences", 0)) / total_trigger * 100)
+        contributions.append({
+            "service": tg["service"],
+            "endpoint": tg["endpoint"],
+            "detail": tg["error"],
+            "occurrences": int(tg.get("occurrences", 0)),
+            "p95_ms": float(tg.get("p95_ms", 0)),
+            "contribution_pct": share,
+        })
+
+    # evidence bullets
     evidence = []
     if top:
         if metric == "error_rate":
@@ -567,23 +591,50 @@ def _anomaly_analysis(a, services, triggers, traces):
         else:
             evidence.append(f"{top['endpoint']} is the slowest operation at p95 {round(float(top['p95_ms']))}ms")
     evidence.append(f"deviation of {round(abs(a.z_score),1)} sigma from a baseline of {round(a.baseline_mean,1)}{unit}")
-    if n_services <= 1:
-        evidence.append("signal isolated to a single service")
-    else:
-        evidence.append(f"signal spans {n_services} services")
+    evidence.append("signal isolated to a single service" if n_services <= 1 else f"signal spans {n_services} services")
 
+    # contributing factors
     factors = []
     if metric == "error_rate":
         factors.append("Error-rate spike")
         if any(float(sv.get("p95_ms", 0)) > 100 for sv in services):
             factors.append("Elevated latency")
-        if n_services > 1:
-            factors.append("Cross-service propagation")
     else:
         factors.append("Latency spike")
         factors.append("Possible dependency slowdown or resource contention")
-        if n_services > 1:
-            factors.append("Cross-service propagation")
+    if n_services > 1:
+        factors.append("Cross-service propagation")
+
+    # why this was detected
+    mult = (a.observed / a.baseline_mean) if a.baseline_mean else 0
+    why = {
+        "metric": metric_label,
+        "observed": f"{round(a.observed,1)}{unit}",
+        "baseline": f"{round(a.baseline_mean,1)}{unit}",
+        "deviation": f"{round(abs(a.z_score),1)}sigma ({round(mult,1)}x baseline)" if mult else f"{round(abs(a.z_score),1)}sigma",
+        "threshold": "z-score >= 3.0 sustained",
+        "reason": (
+            f"{metric_label} rose to {round(a.observed,1)}{unit}, "
+            f"{round(abs(a.z_score),1)} standard deviations above the rolling baseline "
+            f"of {round(a.baseline_mean,1)}{unit}, crossing the detection threshold."
+        ),
+    }
+
+    # investigation guidance (metric-aware)
+    if metric == "error_rate":
+        guidance = [
+            f"Inspect {top['endpoint']} where the failures concentrate" if top else "Identify the operation carrying most failures",
+            "Check recent deploys or config changes to the affected service",
+            "Review the dominant error message for a specific downstream fault",
+            "Verify downstream dependencies (databases, third-party APIs) for the same window",
+        ]
+    else:
+        guidance = [
+            f"Profile {top['endpoint']} for the source of added latency" if top else "Identify the slowest operation",
+            "Check resource saturation (CPU, memory) on the affected service",
+            "Inspect downstream dependency latency (database, cache, upstream calls)",
+            "Look for lock contention, queue buildup, or GC pauses in the window",
+        ]
 
     return {
         "impact": {
@@ -599,7 +650,11 @@ def _anomaly_analysis(a, services, triggers, traces):
             "evidence": evidence,
             "contributing_factors": factors,
         },
+        "why_detected": why,
+        "contributions": contributions,
+        "guidance": guidance,
     }
+
 
 
 @router.get("/anomalies/{anomaly_id}/evidence")

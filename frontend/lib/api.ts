@@ -472,10 +472,27 @@ export type AnomalyAnalysis = {
   };
   rca: {
     likely_cause: string;
-    confidence: number;
+    confidence: string;
     evidence: string[];
     contributing_factors: string[];
   };
+  why_detected: {
+    metric: string;
+    observed: string;
+    baseline: string;
+    deviation: string;
+    threshold: string;
+    reason: string;
+  };
+  contributions: {
+    service: string;
+    endpoint: string;
+    detail: string;
+    occurrences: number;
+    p95_ms: number;
+    contribution_pct: number;
+  }[];
+  guidance: string[];
 };
 
 export type AnomalyEvidence = {
