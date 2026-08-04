@@ -30,29 +30,35 @@ const EMPTY: AlertRuleInput = {
   webhook_urls: null, channel_ids: null,
 };
 
-function FiringAlerts({ minutes, filter }: { minutes: number; filter: "all" | "info" | "warning" | "critical" | "ack" }) {
-  const [alerts, setAlerts] = useState<IncidentRow[]>([]);
-  const [evidence, setEvidence] = useState<Record<string, IncidentEvidence>>({});
-  const [busy, setBusy] = useState<string | null>(null);
+function ruleDef(r: AlertRule): string {
+  if (r.kind === "service_down") return "Service is down";
+  const unit = r.kind === "latency" ? ` ms (p${r.percentile})` : (KIND_UNIT[r.kind] ?? "");
+  return `${KIND_LABEL[r.kind]} > ${r.threshold}${unit}`;
+}
 
+function notifyText(r: AlertRule): string {
+  const chans = (r.channel_ids ?? "").split(",").filter(Boolean).length;
+  const hooks = (r.webhook_urls ?? "").split(",").filter(Boolean).length;
+  const n = chans + hooks;
+  return n === 0 ? "no notifications" : n === 1 ? "notifies 1 channel" : `notifies ${n} channels`;
+}
+
+function FiringAlerts({ minutes, filter, rules }: {
+  minutes: number;
+  filter: "all" | "info" | "warning" | "critical" | "ack";
+  rules: AlertRule[];
+}) {
+  const [alerts, setAlerts] = useState<IncidentRow[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
   const load = useCallback(() => {
     apiGet<IncidentRow[]>("/api/v1/alerts/incidents?status=firing&limit=50")
-      .then((rows) => {
-        setAlerts(rows);
-        rows.forEach((r) => {
-          apiGet<IncidentEvidence>(`/api/v1/alerts/incidents/${r.id}/evidence`)
-            .then((e) => setEvidence((prev) => ({ ...prev, [r.id]: e })))
-            .catch(() => {});
-        });
-      })
-      .catch(() => {});
+      .then(setAlerts).catch(() => {});
   }, []);
   usePoll(load, [], 10000);
-
   async function act(id: string, path: string) {
     setBusy(id);
     try { await apiSend(`/api/v1/alerts/incidents/${id}/${path}`, "POST"); load(); }
-    finally { setBusy(null); }
+    catch { /* ignore */ } finally { setBusy(null); }
   }
 
   const cutoff = Date.now() - minutes * 60_000;
@@ -64,23 +70,33 @@ function FiringAlerts({ minutes, filter }: { minutes: number; filter: "all" | "i
       return a.severity === filter;
     });
 
-  if (shownAlerts.length === 0) return null;
+  if (shownAlerts.length === 0) {
+    if (filter === "all") return null;
+    return (
+      <div className="mb-6 rounded-xl border border-white/10 bg-white/[0.02] px-4 py-6 text-center text-sm text-white/40">
+        No {filter === "ack" ? "acknowledged" : filter} alerts firing right now.
+      </div>
+    );
+  }
+
+  const ruleFor = (a: IncidentRow) => rules.find((r) => r.id === a.rule_id);
 
   return (
-    <div className="mb-8">
+    <div className="mb-6">
       <div className="mb-3 flex items-center gap-2">
-        <span className="h-2 w-2 animate-pulse rounded-full bg-rose-500" />
+        <span className="relative flex h-2 w-2">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400/60" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-rose-500" />
+        </span>
         <h2 className="text-sm font-semibold uppercase tracking-wide text-rose-300">Active alerts</h2>
-        <span className="text-xs text-white/40">{shownAlerts.length} active</span>
+        <span className="text-xs text-white/40">{shownAlerts.length} firing</span>
       </div>
-
       <div className="space-y-2">
         {shownAlerts.map((a) => {
           const m = sevMeta(a.severity);
-          const ev = evidence[a.id];
-          const topSvc = ev?.affected_services?.[0];
-          const topTrig = ev?.triggers?.[0];
+          const r = ruleFor(a);
           const ackd = a.acknowledged_at != null;
+          const unit = a.kind === "error_rate" ? "%" : a.kind.startsWith("latency") ? "ms" : "";
           return (
             <div key={a.id} className={`overflow-hidden rounded-xl border ${m.border} ${m.bg}`}>
               <div className="flex items-stretch">
@@ -94,20 +110,19 @@ function FiringAlerts({ minutes, filter }: { minutes: number; filter: "all" | "i
                     {ackd
                       ? <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] text-amber-300">acknowledged</span>
                       : <span className="rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] text-rose-300">unacknowledged</span>}
-                    <span className="ml-auto text-xs text-white/45">{since(a.started_at)} ago</span>
+                    <span className="ml-auto text-xs text-white/45">firing {since(a.started_at)}</span>
                   </div>
 
-                  <div className="mt-2 grid gap-x-6 gap-y-1 text-xs sm:grid-cols-2">
-                    <div><span className="text-white/35">Service: </span>
-                      <span className="text-white/80">{topTrig?.service ?? topSvc?.service ?? a.service ?? "all services"}</span>
-                      {topSvc && <span className="text-rose-300"> ({topSvc.error_rate}% errors)</span>}
-                    </div>
-                    <div><span className="text-white/35">Endpoint: </span>
-                      <span className="font-mono text-sky-300/80">{topTrig?.endpoint ?? "—"}</span>
-                    </div>
-                    <div className="sm:col-span-2"><span className="text-white/35">Trigger: </span>
-                      <span className="text-white/70">{topTrig ? `${topTrig.error} (${topTrig.occurrences}x)` : a.summary}</span>
-                    </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-white/60">
+                    <span className="rounded bg-white/[0.05] px-2 py-0.5 font-mono text-[11px] text-white/70">
+                      {r ? ruleDef(r) : "rule condition"}
+                    </span>
+                    <span className="text-white/30">·</span>
+                    <span>observed <span className="font-medium text-rose-300">{a.observed_value}{unit}</span></span>
+                    {r && <><span className="text-white/30">·</span><span>sustained {r.for_minutes}m</span></>}
+                    {r && <><span className="text-white/30">·</span><span>{notifyText(r)}</span></>}
+                    <span className="text-white/30">·</span>
+                    <span>{a.service ?? "all services"}</span>
                   </div>
 
                   <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -320,7 +335,7 @@ export default function AlertsPage() {
         <AlertStat label="Resolved" value={sum.resolved} tone="resolved" href="/incidents" />
       </div>
 
-      <FiringAlerts minutes={minutes} filter={alertFilter} />
+      <FiringAlerts minutes={minutes} filter={alertFilter} rules={rules} />
 
       <div className="mb-5 flex items-start justify-between">
         <div>
