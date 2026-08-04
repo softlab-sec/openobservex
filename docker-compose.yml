@@ -143,6 +143,7 @@ services:
 
   ingest-gateway:
     build: ./gateway
+    restart: unless-stopped
     environment:
       COLLECTOR_HTTP: http://otel-collector:4318
       PG_DSN: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}

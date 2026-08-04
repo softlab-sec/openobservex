@@ -291,6 +291,14 @@ async def incident_evidence(
     svc = inc.service
     started = inc.started_at
 
+    # If this incident was promoted from an anomaly, learn its metric so the
+    # evidence can be latency-aware (latency anomalies have no errors to show).
+    inc_metric = "error_rate"
+    if inc.kind == "anomaly":
+        linked = db.scalar(select(Anomaly).where(Anomaly.promoted_incident_id == inc.id))
+        if linked is not None:
+            inc_metric = linked.metric
+
     svc_clause = "AND ServiceName = {svc:String}" if svc else ""
     params = {"start": started.isoformat()}
     if svc:
@@ -331,6 +339,8 @@ async def incident_evidence(
         GROUP BY bucket ORDER BY bucket
     """
 
+    _svc_having = "errors > 0" if inc_metric == "error_rate" else "total > 0"
+    _svc_order = "errors DESC" if inc_metric == "error_rate" else "p95_ms DESC"
     svc_breakdown_q = f"""
         SELECT ServiceName AS service,
                countIf(StatusCode = 'Error') AS errors,
@@ -342,27 +352,45 @@ async def incident_evidence(
           {svc_clause}
           AND {{tenant_scope}}
         GROUP BY service
-        HAVING errors > 0
-        ORDER BY errors DESC
+        HAVING {_svc_having}
+        ORDER BY {_svc_order}
         LIMIT 10
     """
 
-    triggers_q = f"""
-        SELECT ServiceName AS service,
-               SpanName AS endpoint,
-               StatusMessage AS error,
-               count() AS occurrences,
-               round(quantile(0.95)(Duration) / 1000000, 1) AS p95_ms,
-               max(Timestamp) AS last_seen
-        FROM otel_traces
-        WHERE StatusCode = 'Error'
-          AND Timestamp >= parseDateTimeBestEffort({{start:String}})
-          {svc_clause}
-          AND {{tenant_scope}}
-        GROUP BY service, endpoint, error
-        ORDER BY occurrences DESC
-        LIMIT 10
-    """
+    if inc_metric == "error_rate":
+        triggers_q = f"""
+            SELECT ServiceName AS service,
+                   SpanName AS endpoint,
+                   StatusMessage AS error,
+                   count() AS occurrences,
+                   round(quantile(0.95)(Duration) / 1000000, 1) AS p95_ms,
+                   max(Timestamp) AS last_seen
+            FROM otel_traces
+            WHERE StatusCode = 'Error'
+              AND Timestamp >= parseDateTimeBestEffort({{start:String}})
+              {svc_clause}
+              AND {{tenant_scope}}
+            GROUP BY service, endpoint, error
+            ORDER BY occurrences DESC
+            LIMIT 10
+        """
+    else:
+        triggers_q = f"""
+            SELECT ServiceName AS service,
+                   SpanName AS endpoint,
+                   concat('p95 ', toString(round(quantile(0.95)(Duration) / 1000000, 1)), 'ms') AS error,
+                   count() AS occurrences,
+                   round(quantile(0.95)(Duration) / 1000000, 1) AS p95_ms,
+                   max(Timestamp) AS last_seen
+            FROM otel_traces
+            WHERE Timestamp >= parseDateTimeBestEffort({{start:String}})
+              {svc_clause}
+              AND {{tenant_scope}}
+            GROUP BY service, endpoint
+            HAVING count() > 0
+            ORDER BY p95_ms DESC
+            LIMIT 10
+        """
 
     def rows(q):
         try:
@@ -451,6 +479,129 @@ def get_anomaly(anomaly_id: uuid.UUID, user: User = Depends(get_current_user), d
     return _owned_anomaly(anomaly_id, user, db)
 
 
+
+def _anomaly_summary(a, services, triggers):
+    """Deterministic executive overview of an anomaly from its evidence.
+    Metric-aware: describes the deviation, the dominant operation, blast radius,
+    and a plain-language read of what it likely means."""
+    metric_label = "error rate" if a.metric == "error_rate" else "p95 latency"
+    unit = "%" if a.metric == "error_rate" else "ms"
+    obs = f"{round(a.observed, 1)}{unit}"
+    base = f"{round(a.baseline_mean, 1)}{unit}"
+    mult = (a.observed / a.baseline_mean) if a.baseline_mean else 0
+
+    parts = []
+    parts.append(
+        f"{a.service} {metric_label} is {obs}, "
+        f"{('%.1fx' % mult) if mult else 'well'} above its baseline of {base} "
+        f"(z={round(a.z_score, 1)})."
+    )
+
+    if triggers:
+        top = triggers[0]
+        if a.metric == "error_rate":
+            parts.append(
+                f"The failures concentrate on {top['endpoint']} "
+                f"(\"{top['error']}\", {top['occurrences']}x)."
+            )
+        else:
+            parts.append(
+                f"The slowest operation is {top['endpoint']} at p95 {round(float(top['p95_ms']), 0)}ms."
+            )
+
+    n_services = len(services)
+    if n_services <= 1:
+        parts.append("It is isolated to this one service, so the cause is likely local to it (its own code, a dependency, or its resources) rather than a systemic outage.")
+    else:
+        others = ", ".join(sv["service"] for sv in services[:4] if sv["service"] != a.service)
+        parts.append(f"It spans {n_services} services ({others}), suggesting a shared dependency or upstream cause rather than a single-service issue.")
+
+    if a.metric == "error_rate":
+        parts.append("Investigate the failing operation's downstream dependency or recent deploy; a concentrated error message usually points to one specific fault.")
+    else:
+        parts.append("Latency without errors typically means a slow dependency, resource contention, or lock/queue buildup rather than outright failure.")
+
+    return " ".join(parts)
+
+
+
+def _anomaly_analysis(a, services, triggers, traces):
+    """Deterministic RCA-style analysis from evidence. No AI, no faked numbers.
+    Confidence is computed from how concentrated the failure signal is."""
+    metric = a.metric
+    unit = "%" if metric == "error_rate" else "ms"
+
+    n_services = len(services)
+    n_ops = len(triggers)
+    if metric == "error_rate":
+        failed = sum(int(sv.get("errors", 0)) for sv in services)
+    else:
+        failed = sum(int(tg.get("occurrences", 0)) for tg in triggers)
+
+    if a.severity == "critical":
+        user_impact = "High"
+    elif a.severity == "warning":
+        user_impact = "Medium"
+    else:
+        user_impact = "Low"
+
+    likely_cause = "Undetermined"
+    top = triggers[0] if triggers else None
+    if top:
+        if metric == "error_rate":
+            likely_cause = f"{top['error']} on {top['endpoint']}"
+        else:
+            likely_cause = f"Slow {top['endpoint']} (p95 {round(float(top['p95_ms']))}ms)"
+
+    total_trigger = sum(int(t.get("occurrences", 0)) for t in triggers) or 1
+    top_share = (int(top["occurrences"]) / total_trigger) if top else 0.0
+    locality = 1.0 if n_services <= 1 else 0.7
+    strength = min(1.0, abs(a.z_score) / 10.0)
+    confidence = round(min(0.99, 0.35 + 0.4 * top_share + 0.15 * locality + 0.1 * strength) * 100)
+
+    evidence = []
+    if top:
+        if metric == "error_rate":
+            evidence.append(f"{top['endpoint']} produced {round(top_share*100)}% of failures ({top['occurrences']}x)")
+            evidence.append(f'dominant error: "{top["error"]}"')
+        else:
+            evidence.append(f"{top['endpoint']} is the slowest operation at p95 {round(float(top['p95_ms']))}ms")
+    evidence.append(f"deviation of {round(abs(a.z_score),1)} sigma from a baseline of {round(a.baseline_mean,1)}{unit}")
+    if n_services <= 1:
+        evidence.append("signal isolated to a single service")
+    else:
+        evidence.append(f"signal spans {n_services} services")
+
+    factors = []
+    if metric == "error_rate":
+        factors.append("Error-rate spike")
+        if any(float(sv.get("p95_ms", 0)) > 100 for sv in services):
+            factors.append("Elevated latency")
+        if n_services > 1:
+            factors.append("Cross-service propagation")
+    else:
+        factors.append("Latency spike")
+        factors.append("Possible dependency slowdown or resource contention")
+        if n_services > 1:
+            factors.append("Cross-service propagation")
+
+    return {
+        "impact": {
+            "affected_services": n_services,
+            "affected_operations": n_ops,
+            "failed_requests": failed,
+            "user_impact": user_impact,
+            "likely_cause": likely_cause,
+        },
+        "rca": {
+            "likely_cause": likely_cause,
+            "confidence": confidence,
+            "evidence": evidence,
+            "contributing_factors": factors,
+        },
+    }
+
+
 @router.get("/anomalies/{anomaly_id}/evidence")
 async def anomaly_evidence(
     anomaly_id: uuid.UUID,
@@ -485,33 +636,63 @@ async def anomaly_evidence(
         ORDER BY errors DESC
         LIMIT 10
     """
-    triggers_q = f"""
-        SELECT ServiceName AS service,
-               SpanName AS endpoint,
-               StatusMessage AS error,
-               count() AS occurrences,
-               round(quantile(0.95)(Duration) / 1000000, 1) AS p95_ms,
-               max(Timestamp) AS last_seen
-        FROM otel_traces
-        WHERE StatusCode = 'Error'
-          AND Timestamp >= parseDateTimeBestEffort({{start:String}})
-          {svc_clause}
-          AND {{tenant_scope}}
-        GROUP BY service, endpoint, error
-        ORDER BY occurrences DESC
-        LIMIT 10
-    """
-    trace_q = f"""
-        SELECT TraceId AS trace_id, ServiceName AS service, SpanName AS operation,
-               Duration / 1000000 AS duration_ms, Timestamp AS ts
-        FROM otel_traces
-        WHERE StatusCode = 'Error'
-          AND Timestamp >= parseDateTimeBestEffort({{start:String}})
-          {svc_clause}
-          AND {{tenant_scope}}
-        ORDER BY Timestamp DESC
-        LIMIT 10
-    """
+    if a.metric == "error_rate":
+        # failing operations, ranked by how often they fail
+        triggers_q = f"""
+            SELECT ServiceName AS service,
+                   SpanName AS endpoint,
+                   StatusMessage AS error,
+                   count() AS occurrences,
+                   round(quantile(0.95)(Duration) / 1000000, 1) AS p95_ms,
+                   max(Timestamp) AS last_seen
+            FROM otel_traces
+            WHERE StatusCode = 'Error'
+              AND Timestamp >= parseDateTimeBestEffort({{start:String}})
+              {svc_clause}
+              AND {{tenant_scope}}
+            GROUP BY service, endpoint, error
+            ORDER BY occurrences DESC
+            LIMIT 10
+        """
+        trace_q = f"""
+            SELECT TraceId AS trace_id, ServiceName AS service, SpanName AS operation,
+                   Duration / 1000000 AS duration_ms, Timestamp AS ts
+            FROM otel_traces
+            WHERE StatusCode = 'Error'
+              AND Timestamp >= parseDateTimeBestEffort({{start:String}})
+              {svc_clause}
+              AND {{tenant_scope}}
+            ORDER BY Timestamp DESC
+            LIMIT 10
+        """
+    else:
+        # p95_latency: slowest operations, ranked by p95; "error" column carries a latency note
+        triggers_q = f"""
+            SELECT ServiceName AS service,
+                   SpanName AS endpoint,
+                   concat('p95 ', toString(round(quantile(0.95)(Duration) / 1000000, 1)), 'ms') AS error,
+                   count() AS occurrences,
+                   round(quantile(0.95)(Duration) / 1000000, 1) AS p95_ms,
+                   max(Timestamp) AS last_seen
+            FROM otel_traces
+            WHERE Timestamp >= parseDateTimeBestEffort({{start:String}})
+              {svc_clause}
+              AND {{tenant_scope}}
+            GROUP BY service, endpoint
+            HAVING count() > 0
+            ORDER BY p95_ms DESC
+            LIMIT 10
+        """
+        trace_q = f"""
+            SELECT TraceId AS trace_id, ServiceName AS service, SpanName AS operation,
+                   Duration / 1000000 AS duration_ms, Timestamp AS ts
+            FROM otel_traces
+            WHERE Timestamp >= parseDateTimeBestEffort({{start:String}})
+              {svc_clause}
+              AND {{tenant_scope}}
+            ORDER BY Duration DESC
+            LIMIT 10
+        """
     trend_q = f"""
         SELECT toStartOfMinute(Timestamp) AS bucket,
                countIf(StatusCode = 'Error') AS errors, count() AS total,
@@ -552,6 +733,8 @@ async def anomaly_evidence(
         "observed": a.observed,
         "baseline_mean": a.baseline_mean,
         "z_score": a.z_score,
+        "summary": _anomaly_summary(a, services, triggers),
+        "analysis": _anomaly_analysis(a, services, triggers, traces),
         "affected_services": [
             {"service": sv["service"], "errors": sv["errors"], "total": sv["total"],
              "error_rate": float(sv["error_rate"]), "p95_ms": float(sv["p95_ms"])}

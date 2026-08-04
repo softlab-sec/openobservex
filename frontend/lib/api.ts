@@ -356,6 +356,7 @@ export type IncidentRow = {
   observed_value: number;
   threshold: number;
   summary: string;
+  analysis: AnomalyAnalysis;
   started_at: string;
   resolved_at: string | null;
   acknowledged_at: string | null;
@@ -460,6 +461,23 @@ export type AnomalyTrigger = {
   last_seen: string;
 };
 export type AnomalyTrendPoint = { bucket: string; value: number };
+
+export type AnomalyAnalysis = {
+  impact: {
+    affected_services: number;
+    affected_operations: number;
+    failed_requests: number;
+    user_impact: string;
+    likely_cause: string;
+  };
+  rca: {
+    likely_cause: string;
+    confidence: number;
+    evidence: string[];
+    contributing_factors: string[];
+  };
+};
+
 export type AnomalyEvidence = {
   anomaly_id: string;
   service: string | null;
@@ -467,6 +485,7 @@ export type AnomalyEvidence = {
   observed: number;
   baseline_mean: number;
   z_score: number;
+  summary: string;
   affected_services: AffectedService[];
   triggers: AnomalyTrigger[];
   sample_traces: SampleTrace[];

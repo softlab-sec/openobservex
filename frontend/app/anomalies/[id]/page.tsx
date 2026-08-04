@@ -50,6 +50,8 @@ export default function AnomalyDetailPage({ params }: { params: Promise<{ id: st
   const active = a.status === "active";
   const deviation = a.observed >= a.baseline_mean ? "above" : "below";
   const maxTrend = ev && ev.trend.length ? Math.max(...ev.trend.map((t) => t.value), 1) : 1;
+  const impact = ev?.analysis?.impact;
+  const rca = ev?.analysis?.rca;
 
   return (
     <Shell>
@@ -58,6 +60,7 @@ export default function AnomalyDetailPage({ params }: { params: Promise<{ id: st
         All anomalies
       </Link>
 
+      {/* 1. EXECUTIVE SUMMARY */}
       <div className={`rounded-xl border ${m.border} ${m.bg} p-5`}>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
@@ -87,8 +90,15 @@ export default function AnomalyDetailPage({ params }: { params: Promise<{ id: st
           <Fact label="Occurrences" value={`${a.occurrences}x`} />
           <Fact label={active ? "Active for" : "Lasted"} value={active ? since(a.first_seen) : duration(a.first_seen, a.resolved_at)} />
         </div>
+
+        {ev?.summary && (
+          <p className="mt-4 border-t border-white/10 pt-4 text-sm leading-relaxed text-white/75">
+            {ev.summary}
+          </p>
+        )}
       </div>
 
+      {/* action bar */}
       {(active || !a.promoted_incident_id) && (
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {active && (
@@ -125,16 +135,18 @@ export default function AnomalyDetailPage({ params }: { params: Promise<{ id: st
         </Link>
       )}
 
-      <div className="mt-4 rounded-xl border border-violet-400/20 bg-violet-500/[0.04] p-5">
-        <div className="flex items-center gap-2">
-          <svg className="h-4 w-4 text-violet-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2a7 7 0 00-4 12.7V17a1 1 0 001 1h6a1 1 0 001-1v-2.3A7 7 0 0012 2zM9 21h6" /></svg>
-          <h2 className="text-sm font-medium text-white/80">Root-cause analysis</h2>
+      {/* 2. IMPACT SUMMARY */}
+      {impact && (
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <ImpactCard label="Affected services" value={String(impact.affected_services)} />
+          <ImpactCard label="Affected operations" value={String(impact.affected_operations)} />
+          <ImpactCard label={a.metric === "error_rate" ? "Failed requests" : "Impacted calls"} value={impact.failed_requests.toLocaleString()} />
+          <ImpactCard label="User impact" value={impact.user_impact}
+            tone={impact.user_impact === "High" ? "critical" : impact.user_impact === "Medium" ? "warning" : "neutral"} />
         </div>
-        <p className="mt-2 text-sm text-white/40">
-          AI root-cause analysis for this anomaly will appear here.
-        </p>
-      </div>
+      )}
 
+      {/* 3. TREND */}
       {ev && ev.trend.length > 0 && (
         <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-5">
           <h2 className="mb-3 text-sm font-medium text-white/80">{METRIC_LABEL[a.metric] ?? a.metric} over the window</h2>
@@ -150,9 +162,10 @@ export default function AnomalyDetailPage({ params }: { params: Promise<{ id: st
         </div>
       )}
 
+      {/* 4. WHAT'S HAPPENING (evidence) */}
       {ev && (ev.affected_services.length > 0 || ev.triggers.length > 0) && (
         <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-5">
-          <h2 className="mb-1 text-sm font-medium text-white/80">What&apos;s happening</h2>
+          <h2 className="mb-1 text-sm font-medium text-white/80">Evidence &amp; correlation</h2>
           <p className="mb-4 text-xs text-white/40">Live telemetry from the anomaly window.</p>
 
           {ev.affected_services.length > 0 && (
@@ -162,8 +175,14 @@ export default function AnomalyDetailPage({ params }: { params: Promise<{ id: st
                 {ev.affected_services.map((sv) => (
                   <div key={sv.service} className="flex items-center gap-3 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2">
                     <span className="min-w-0 flex-1 truncate text-sm font-medium text-white/85">{sv.service}</span>
-                    <span className="text-xs text-rose-300">{sv.error_rate}% errors</span>
-                    <span className="text-xs text-white/40">{sv.errors}/{sv.total}</span>
+                    {a.metric === "error_rate" ? (
+                      <>
+                        <span className="text-xs text-rose-300">{sv.error_rate}% errors</span>
+                        <span className="text-xs text-white/40">{sv.errors}/{sv.total}</span>
+                      </>
+                    ) : (
+                      <span className="text-xs text-white/40">{sv.total} calls</span>
+                    )}
                     <span className="w-20 text-right text-xs text-white/50">p95 {sv.p95_ms}ms</span>
                   </div>
                 ))}
@@ -173,7 +192,7 @@ export default function AnomalyDetailPage({ params }: { params: Promise<{ id: st
 
           {ev.triggers.length > 0 && (
             <div className="mb-5">
-              <div className="mb-2 text-xs uppercase tracking-wide text-white/35">Triggering operations</div>
+              <div className="mb-2 text-xs uppercase tracking-wide text-white/35">{a.metric === "error_rate" ? "Triggering operations" : "Slowest operations"}</div>
               <div className="space-y-1.5">
                 {ev.triggers.slice(0, 8).map((tg, i) => (
                   <div key={i} className="flex items-center gap-3 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2">
@@ -206,6 +225,50 @@ export default function AnomalyDetailPage({ params }: { params: Promise<{ id: st
           )}
         </div>
       )}
+
+      {/* 5. ROOT-CAUSE ANALYSIS — at the very bottom */}
+      <div className="mt-4 rounded-xl border border-violet-400/20 bg-violet-500/[0.04] p-5">
+        <div className="mb-3 flex items-center gap-2">
+          <svg className="h-4 w-4 text-violet-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2a7 7 0 00-4 12.7V17a1 1 0 001 1h6a1 1 0 001-1v-2.3A7 7 0 0012 2zM9 21h6" /></svg>
+          <h2 className="text-sm font-medium text-white/80">Root-cause analysis</h2>
+          {rca && (
+            <span className="ml-auto rounded-full bg-violet-500/15 px-2.5 py-0.5 text-[11px] text-violet-200">
+              {rca.confidence}% confidence
+            </span>
+          )}
+        </div>
+        {rca ? (
+          <>
+            <p className="text-sm text-white/85">
+              <span className="text-white/45">Likely cause: </span>{rca.likely_cause}
+            </p>
+            {rca.evidence.length > 0 && (
+              <div className="mt-3">
+                <div className="mb-1.5 text-xs uppercase tracking-wide text-white/35">Evidence</div>
+                <ul className="space-y-1">
+                  {rca.evidence.map((e, i) => (
+                    <li key={i} className="flex gap-2 text-sm text-white/70">
+                      <span className="text-violet-300/70">•</span><span>{e}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {rca.contributing_factors.length > 0 && (
+              <div className="mt-3">
+                <div className="mb-1.5 text-xs uppercase tracking-wide text-white/35">Contributing factors</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {rca.contributing_factors.map((f, i) => (
+                    <span key={i} className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-0.5 text-xs text-white/60">{f}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <p className="text-sm text-white/40">Analysis will appear once evidence is available.</p>
+        )}
+      </div>
     </Shell>
   );
 }
@@ -215,6 +278,19 @@ function Fact({ label, value, accent }: { label: string; value: string; accent?:
     <div>
       <div className="text-[11px] uppercase tracking-wide text-white/35">{label}</div>
       <div className={`mt-0.5 text-sm font-medium ${accent ?? "text-white/80"}`}>{value}</div>
+    </div>
+  );
+}
+
+function ImpactCard({ label, value, tone }: { label: string; value: string; tone?: "critical" | "warning" | "neutral" }) {
+  const toneCls =
+    tone === "critical" ? "text-rose-300"
+    : tone === "warning" ? "text-amber-300"
+    : "text-white/85";
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3">
+      <div className={`text-xl font-semibold tabular-nums ${toneCls}`}>{value}</div>
+      <div className="mt-0.5 text-xs text-white/45">{label}</div>
     </div>
   );
 }
