@@ -5,6 +5,7 @@ import { use, useCallback, useEffect, useState } from "react";
 import Shell from "@/components/Shell";
 import { apiGet, apiSend, type AnomalyRow, type AnomalyEvidence } from "@/lib/api";
 import { sevMeta, since, duration } from "@/lib/severity";
+import { ComposedChart, Area, Line, ReferenceLine, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 const METRIC_LABEL: Record<string, string> = {
   error_rate: "Error rate",
@@ -194,16 +195,51 @@ export default function AnomalyDetailPage({ params }: { params: Promise<{ id: st
       {/* 5. TREND */}
       {ev && ev.trend.length > 0 && (
         <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-5">
-          <h2 className="mb-3 text-sm font-medium text-white/80">{METRIC_LABEL[a.metric] ?? a.metric} over the window</h2>
-          <div className="flex items-end gap-1" style={{ height: 80 }}>
-            {ev.trend.map((t, i) => (
-              <div key={i} className="flex-1 rounded-t bg-sky-400/40" style={{ height: `${Math.max(3, (t.value / maxTrend) * 100)}%` }} title={`${t.bucket}: ${t.value}`} />
-            ))}
+          <div className="mb-1 flex items-center justify-between">
+            <h2 className="text-sm font-medium text-white/80">Baseline comparison</h2>
+            <div className="flex items-center gap-4 text-[11px] text-white/45">
+              <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 bg-sky-400" />observed</span>
+              <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 border-t border-dashed border-white/50" />baseline</span>
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-sm bg-emerald-400/15" />normal range</span>
+            </div>
           </div>
-          <div className="mt-1 flex justify-between text-[10px] text-white/30">
-            <span>{ev.trend[0]?.bucket?.slice(11, 16)}</span>
-            <span>{ev.trend[ev.trend.length - 1]?.bucket?.slice(11, 16)}</span>
-          </div>
+          <p className="mb-3 text-xs text-white/40">Observed {METRIC_LABEL[a.metric]?.toLowerCase() ?? a.metric} against the expected baseline and its normal range. Points outside the band are anomalous.</p>
+          {(() => {
+            const Z = 3.0;
+            const band = a.baseline_std * Z;
+            const upper = a.baseline_mean + band;
+            const lower = Math.max(0, a.baseline_mean - band);
+            const data = ev.trend.map((t) => ({
+              time: t.bucket?.slice(11, 16) ?? "",
+              observed: t.value,
+              lower,
+              range: upper - lower,
+            }));
+            const unit = a.metric === "error_rate" ? "%" : "ms";
+            return (
+              <div style={{ height: 260 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                    <XAxis dataKey="time" tick={{ fontSize: 10, fill: "rgba(255,255,255,0.35)" }} axisLine={false} tickLine={false} minTickGap={40} />
+                    <YAxis tick={{ fontSize: 10, fill: "rgba(255,255,255,0.35)" }} axisLine={false} tickLine={false} width={38} unit={unit} />
+                    <Tooltip
+                      contentStyle={{ background: "#0d0d12", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 12 }}
+                      labelStyle={{ color: "rgba(255,255,255,0.6)" }}
+                      formatter={(val: number, name: string) => {
+                        if (name === "lower" || name === "range") return [null, null];
+                        const dev = a.baseline_std ? ((val - a.baseline_mean) / a.baseline_std).toFixed(1) : "—";
+                        return [`${val}${unit} (${dev}σ from baseline)`, "observed"];
+                      }}
+                    />
+                    <Area dataKey="lower" stackId="band" stroke="none" fill="transparent" isAnimationActive={false} />
+                    <Area dataKey="range" stackId="band" stroke="none" fill="rgba(52,211,153,0.12)" isAnimationActive={false} />
+                    <ReferenceLine y={a.baseline_mean} stroke="rgba(255,255,255,0.5)" strokeDasharray="4 4" />
+                    <Line dataKey="observed" stroke="#38bdf8" strokeWidth={2} dot={false} isAnimationActive={false} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            );
+          })()}
         </div>
       )}
 
