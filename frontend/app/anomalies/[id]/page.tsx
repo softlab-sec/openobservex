@@ -53,6 +53,7 @@ export default function AnomalyDetailPage({ params }: { params: Promise<{ id: st
   const an = ev?.analysis;
   const impact = an?.impact;
   const why = an?.why_detected;
+  const pattern = an?.pattern;
 
   return (
     <Shell>
@@ -147,6 +148,33 @@ export default function AnomalyDetailPage({ params }: { params: Promise<{ id: st
         </div>
       )}
 
+
+      {/* 3. AI INSIGHTS — analytical pattern classification (not root cause) */}
+      {pattern && (
+        <div className="mt-4 rounded-xl border border-teal-400/25 bg-teal-500/[0.05] p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <svg className="h-4 w-4 text-teal-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 3v3m0 12v3m9-9h-3M6 12H3m14.5-6.5l-2 2m-7 7l-2 2m11 0l-2-2m-7-7l-2-2" /></svg>
+            <h2 className="text-sm font-semibold text-white/85">AI Insights</h2>
+            <span className="ml-auto rounded-full bg-teal-500/15 px-3 py-0.5 text-[11px] font-medium text-teal-200">{pattern.pattern}</span>
+          </div>
+          <p className="text-sm text-white/85">
+            <span className="text-white/45">This looks like a </span>
+            <span className="font-medium text-teal-200">{pattern.pattern}</span>
+            <span className="text-white/45"> pattern.</span>
+          </p>
+          <p className="mt-1 text-sm leading-relaxed text-white/65">{pattern.description}</p>
+          {pattern.signals.length > 0 && (
+            <div className="mt-3">
+              <div className="mb-1.5 text-xs uppercase tracking-wide text-white/35">Signals</div>
+              <ul className="space-y-1">
+                {pattern.signals.map((sig, i) => (
+                  <li key={i} className="flex gap-2 text-sm text-white/70"><span className="text-teal-300/70">•</span><span>{sig}</span></li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 4. WHY THIS WAS DETECTED */}
       {why && (

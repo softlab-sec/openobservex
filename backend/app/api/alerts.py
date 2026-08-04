@@ -644,6 +644,47 @@ def _anomaly_summary(a, services, triggers):
 
 
 
+def _classify_pattern(a, services, triggers):
+    """Deterministic pattern classification: what KIND of unusual behavior this is
+    (analytical, not root cause). Returns pattern + the signals that classified it."""
+    metric = a.metric
+    n_services = len(services)
+    n_ops = len(triggers)
+    total_calls = sum(int(sv.get("total", 0)) for sv in services)
+    total_errors = sum(int(sv.get("errors", 0)) for sv in services)
+    err_frac = (total_errors / total_calls) if total_calls else 0.0
+    signals = []
+
+    if metric == "error_rate":
+        pattern = "Error Surge"
+        top = triggers[0] if triggers else None
+        if top:
+            signals.append(f'dominant error "{top["error"]}" on {top["endpoint"]}')
+        signals.append(f"error fraction {round(err_frac*100)}% across {n_services} service(s)")
+        desc = "A sharp rise in failed requests. Usually a bad deploy, a failing downstream dependency, or invalid input concentrated on one operation."
+    else:
+        if err_frac < 0.02 and n_ops <= 1:
+            pattern = "Dependency Slowdown"
+            signals.append("latency elevated with negligible errors")
+            signals.append("concentrated in a single operation")
+            desc = "One operation got slower without failing. Typically a slow downstream call (database, cache, upstream API) rather than a fault in this service."
+        elif err_frac < 0.02 and n_ops >= 3:
+            pattern = "Resource Contention"
+            signals.append(f"latency elevated across {n_ops} operations in the service")
+            signals.append("errors negligible, breadth suggests a shared resource")
+            desc = "Many operations slowed at once, pointing to a shared constraint: CPU, memory, connection pool, or thread saturation on the host."
+        elif int(getattr(a, "occurrences", 0)) >= 3:
+            pattern = "Queue Saturation"
+            signals.append("latency climbing with sustained, growing occurrences")
+            desc = "Latency building over time as work backs up. Consumers are falling behind producers; a queue or backlog is filling."
+        else:
+            pattern = "Traffic Surge"
+            signals.append(f"{total_calls} calls in window with elevated latency, low errors")
+            desc = "The service is handling more load than usual. Slower but not failing, consistent with a spike in demand rather than a defect."
+
+    return {"pattern": pattern, "signals": signals, "description": desc}
+
+
 def _anomaly_analysis(a, services, triggers, traces):
     """Deterministic RCA-style analysis from evidence. No AI, no faked numbers.
     Confidence is qualitative (Low/Medium/High), derived from how concentrated
@@ -772,6 +813,7 @@ def _anomaly_analysis(a, services, triggers, traces):
         "why_detected": why,
         "contributions": contributions,
         "guidance": guidance,
+        "pattern": _classify_pattern(a, services, triggers),
     }
 
 

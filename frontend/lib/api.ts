@@ -496,7 +496,12 @@ export type AnomalyAnalysis = {
     failed_requests: number;
     user_impact: string;
     likely_cause: string;
+  pattern: {
+    pattern: string;
+    signals: string[];
+    description: string;
   };
+};
   rca: {
     likely_cause: string;
     confidence: string;
