@@ -278,6 +278,88 @@ def resolve_incident(incident_id: uuid.UUID, user: User = Depends(get_current_us
     return inc
 
 
+def _incident_analysis(inc, inc_metric, services, triggers, error_patterns):
+    """Deterministic RCA analysis for an incident, mirroring the anomaly analysis.
+    Qualitative confidence from evidence concentration."""
+    metric = inc_metric  # 'error_rate' or 'p95_latency'
+    n_services = len(services)
+    n_ops = len(triggers)
+    if metric == "error_rate":
+        failed = sum(int(sv.get("errors", 0)) for sv in services)
+    else:
+        failed = sum(int(tg.get("occurrences", 0)) for tg in triggers)
+
+    sev = inc.severity
+    user_impact = "High" if sev == "critical" else "Medium" if sev == "warning" else "Low"
+
+    likely_cause = "Undetermined"
+    top = triggers[0] if triggers else None
+    if top:
+        if metric == "error_rate":
+            likely_cause = f"{top['error']} on {top['endpoint']}"
+        else:
+            likely_cause = f"Slow {top['endpoint']} (p95 {round(float(top['p95_ms']))}ms)"
+
+    total_trigger = sum(int(t.get("occurrences", 0)) for t in triggers) or 1
+    top_share = (int(top["occurrences"]) / total_trigger) if top else 0.0
+    locality = 1.0 if n_services <= 1 else 0.7
+    score = 0.35 + 0.4 * top_share + 0.15 * locality + 0.1
+    confidence = "High" if score >= 0.8 else "Medium" if score >= 0.6 else "Low"
+
+    contributions = []
+    for tg in triggers[:8]:
+        share = round(int(tg.get("occurrences", 0)) / total_trigger * 100)
+        contributions.append({
+            "service": tg["service"], "endpoint": tg["endpoint"], "detail": tg["error"],
+            "occurrences": int(tg.get("occurrences", 0)), "p95_ms": float(tg.get("p95_ms", 0)),
+            "contribution_pct": share,
+        })
+
+    evidence = []
+    if top:
+        if metric == "error_rate":
+            evidence.append(f"{top['endpoint']} produced {round(top_share*100)}% of failures ({top['occurrences']}x)")
+            evidence.append(f'dominant error: "{top["error"]}"')
+        else:
+            evidence.append(f"{top['endpoint']} is the slowest operation at p95 {round(float(top['p95_ms']))}ms")
+    evidence.append("signal isolated to a single service" if n_services <= 1 else f"signal spans {n_services} services")
+
+    factors = []
+    if metric == "error_rate":
+        factors.append("Error-rate spike")
+        if any(float(sv.get("p95_ms", 0)) > 100 for sv in services):
+            factors.append("Elevated latency")
+    else:
+        factors.append("Latency spike")
+        factors.append("Possible dependency slowdown")
+    if n_services > 1:
+        factors.append("Cross-service propagation")
+
+    if metric == "error_rate":
+        guidance = [
+            f"Inspect {top['endpoint']} where failures concentrate" if top else "Identify the operation carrying most failures",
+            "Check recent deploys or config changes to the affected service",
+            "Review the dominant error message for a specific downstream fault",
+            "Verify downstream dependencies for the same window",
+        ]
+    else:
+        guidance = [
+            f"Profile {top['endpoint']} for the source of added latency" if top else "Identify the slowest operation",
+            "Check resource saturation (CPU, memory) on the affected service",
+            "Inspect downstream dependency latency (database, cache)",
+            "Look for lock contention or queue buildup in the window",
+        ]
+
+    return {
+        "impact": {"affected_services": n_services, "affected_operations": n_ops,
+                   "failed_requests": failed, "user_impact": user_impact, "likely_cause": likely_cause},
+        "rca": {"likely_cause": likely_cause, "confidence": confidence,
+                "evidence": evidence, "contributing_factors": factors},
+        "contributions": contributions,
+        "guidance": guidance,
+    }
+
+
 @router.get("/incidents/{incident_id}/evidence")
 async def incident_evidence(
     incident_id: uuid.UUID,
@@ -414,6 +496,7 @@ async def incident_evidence(
     return {
         "incident_id": str(inc.id), "service": svc,
         "observed_value": inc.observed_value, "threshold": inc.threshold, "kind": inc.kind,
+        "analysis": _incident_analysis(inc, inc_metric, services, triggers, errors),
         "affected_services": [
             {"service": sv["service"], "errors": sv["errors"], "total": sv["total"],
              "error_rate": float(sv["error_rate"]), "p95_ms": float(sv["p95_ms"])}

@@ -15,12 +15,6 @@ function fmtVal(v: number, metric: string): string {
   return metric === "error_rate" ? `${v.toFixed(2)}%` : `${v.toFixed(0)} ms`;
 }
 
-function confTone(c: string): string {
-  return c === "High" ? "bg-emerald-500/15 text-emerald-300"
-    : c === "Medium" ? "bg-amber-500/15 text-amber-300"
-    : "bg-white/10 text-white/60";
-}
-
 export default function AnomalyDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [a, setA] = useState<AnomalyRow | null>(null);
@@ -58,7 +52,6 @@ export default function AnomalyDetailPage({ params }: { params: Promise<{ id: st
   const maxTrend = ev && ev.trend.length ? Math.max(...ev.trend.map((t) => t.value), 1) : 1;
   const an = ev?.analysis;
   const impact = an?.impact;
-  const rca = an?.rca;
   const why = an?.why_detected;
 
   return (
@@ -154,49 +147,6 @@ export default function AnomalyDetailPage({ params }: { params: Promise<{ id: st
         </div>
       )}
 
-      {/* 3. ROOT CAUSE — directly below impact, qualitative confidence */}
-      <div className="mt-4 rounded-xl border border-violet-400/20 bg-violet-500/[0.04] p-5">
-        <div className="mb-3 flex items-center gap-2">
-          <svg className="h-4 w-4 text-violet-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2a7 7 0 00-4 12.7V17a1 1 0 001 1h6a1 1 0 001-1v-2.3A7 7 0 0012 2zM9 21h6" /></svg>
-          <h2 className="text-sm font-medium text-white/80">Root-cause analysis</h2>
-          {rca && (
-            <span className={`ml-auto rounded-full px-2.5 py-0.5 text-[11px] ${confTone(rca.confidence)}`}>
-              {rca.confidence} confidence
-            </span>
-          )}
-        </div>
-        {rca ? (
-          <>
-            <p className="text-sm text-white/85">
-              <span className="text-white/45">Likely cause: </span>{rca.likely_cause}
-            </p>
-            {rca.evidence.length > 0 && (
-              <div className="mt-3">
-                <div className="mb-1.5 text-xs uppercase tracking-wide text-white/35">Evidence</div>
-                <ul className="space-y-1">
-                  {rca.evidence.map((e, i) => (
-                    <li key={i} className="flex gap-2 text-sm text-white/70">
-                      <span className="text-violet-300/70">•</span><span>{e}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {rca.contributing_factors.length > 0 && (
-              <div className="mt-3">
-                <div className="mb-1.5 text-xs uppercase tracking-wide text-white/35">Contributing factors</div>
-                <div className="flex flex-wrap gap-1.5">
-                  {rca.contributing_factors.map((f, i) => (
-                    <span key={i} className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-0.5 text-xs text-white/60">{f}</span>
-                  ))}
-                </div>
-              </div>
-            )}
-          </>
-        ) : (
-          <p className="text-sm text-white/40">Analysis will appear once evidence is available.</p>
-        )}
-      </div>
 
       {/* 4. WHY THIS WAS DETECTED */}
       {why && (

@@ -421,7 +421,34 @@ export type IncidentTrigger = {
   p95_ms: number;
   last_seen: string;
 };
+
+export type IncidentAnalysis = {
+  impact: {
+    affected_services: number;
+    affected_operations: number;
+    failed_requests: number;
+    user_impact: string;
+    likely_cause: string;
+  };
+  rca: {
+    likely_cause: string;
+    confidence: string;
+    evidence: string[];
+    contributing_factors: string[];
+  };
+  contributions: {
+    service: string;
+    endpoint: string;
+    detail: string;
+    occurrences: number;
+    p95_ms: number;
+    contribution_pct: number;
+  }[];
+  guidance: string[];
+};
+
 export type IncidentEvidence = {
+  analysis?: IncidentAnalysis;
   triggers: IncidentTrigger[];
   incident_id: string;
   service: string | null;
