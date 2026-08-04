@@ -30,6 +30,34 @@ const EMPTY: AlertRuleInput = {
   webhook_urls: null, channel_ids: null,
 };
 
+function fmtDur(sec: number | null | undefined): string {
+  if (sec == null) return "—";
+  if (sec < 60) return `${Math.round(sec)}s`;
+  if (sec < 3600) return `${Math.round(sec / 60)}m`;
+  return `${(sec / 3600).toFixed(1)}h`;
+}
+
+function KpiCell({ label, value, tone, active, onClick, href }: {
+  label: string; value: number | string;
+  tone: "critical" | "warning" | "info" | "ack" | "resolved" | "neutral";
+  active?: boolean; onClick?: () => void; href?: string;
+}) {
+  const toneCls =
+    tone === "critical" ? "text-rose-300" : tone === "warning" ? "text-amber-300"
+    : tone === "info" ? "text-sky-300" : tone === "ack" ? "text-violet-300"
+    : tone === "resolved" ? "text-emerald-300" : "text-white/85";
+  const inner = (
+    <>
+      <div className={`text-2xl font-semibold tabular-nums ${toneCls}`}>{value}</div>
+      <div className="mt-0.5 text-[11px] uppercase tracking-wide text-white/40">{label}</div>
+    </>
+  );
+  const base = `bg-[#0d0d12] px-4 py-3 text-left transition ${active ? "ring-1 ring-inset ring-white/25" : ""} ${(onClick || href) ? "hover:bg-white/[0.03]" : ""}`;
+  if (href) return <a href={href} className={base + " block"}>{inner}</a>;
+  if (onClick) return <button onClick={onClick} className={base + " block w-full"}>{inner}</button>;
+  return <div className={base}>{inner}</div>;
+}
+
 function ruleDef(r: AlertRule): string {
   if (r.kind === "service_down") return "Service is down";
   const unit = r.kind === "latency" ? ` ms (p${r.percentile})` : (KIND_UNIT[r.kind] ?? "");
@@ -62,7 +90,7 @@ function FiringAlerts({ minutes, filter, rules }: {
   }
 
   const cutoff = Date.now() - minutes * 60_000;
-  const shownAlerts = alerts
+  const shown = alerts
     .filter((a) => new Date(a.started_at).getTime() >= cutoff)
     .filter((a) => {
       if (filter === "all") return true;
@@ -70,77 +98,79 @@ function FiringAlerts({ minutes, filter, rules }: {
       return a.severity === filter;
     });
 
-  if (shownAlerts.length === 0) {
-    if (filter === "all") return null;
+  const ruleFor = (a: IncidentRow) => rules.find((r) => r.id === a.rule_id);
+  const lanes: Array<"critical" | "warning" | "info"> = ["critical", "warning", "info"];
+  const laneMeta: Record<string, { label: string; text: string; rule: string }> = {
+    critical: { label: "Critical", text: "text-rose-300", rule: "bg-rose-500/40" },
+    warning: { label: "Warning", text: "text-amber-300", rule: "bg-amber-400/40" },
+    info: { label: "Info", text: "text-sky-300", rule: "bg-sky-400/40" },
+  };
+
+  if (shown.length === 0) {
     return (
-      <div className="mb-6 rounded-xl border border-white/10 bg-white/[0.02] px-4 py-6 text-center text-sm text-white/40">
-        No {filter === "ack" ? "acknowledged" : filter} alerts firing right now.
+      <div className="mb-8 rounded-xl border border-white/10 bg-white/[0.02] px-4 py-8 text-center text-sm text-white/40">
+        {filter === "all" ? "No alerts firing right now." : `No ${filter === "ack" ? "acknowledged" : filter} alerts firing right now.`}
       </div>
     );
   }
 
-  const ruleFor = (a: IncidentRow) => rules.find((r) => r.id === a.rule_id);
-
   return (
-    <div className="mb-6">
-      <div className="mb-3 flex items-center gap-2">
-        <span className="relative flex h-2 w-2">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400/60" />
-          <span className="relative inline-flex h-2 w-2 rounded-full bg-rose-500" />
-        </span>
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-rose-300">Active alerts</h2>
-        <span className="text-xs text-white/40">{shownAlerts.length} firing</span>
-      </div>
-      <div className="space-y-2">
-        {shownAlerts.map((a) => {
-          const m = sevMeta(a.severity);
-          const r = ruleFor(a);
-          const ackd = a.acknowledged_at != null;
-          const unit = a.kind === "error_rate" ? "%" : a.kind.startsWith("latency") ? "ms" : "";
-          return (
-            <div key={a.id} className={`overflow-hidden rounded-xl border ${m.border} ${m.bg}`}>
-              <div className="flex items-stretch">
-                <span className={`w-1 shrink-0 ${m.bar}`} />
-                <div className="flex-1 p-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${m.bg} ${m.text} ${m.border}`}>
-                      <span className={`h-1.5 w-1.5 rounded-full ${m.dot}`} />{m.label}
-                    </span>
-                    <span className="font-medium text-white/90">{a.rule_name}</span>
-                    {ackd
-                      ? <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] text-amber-300">acknowledged</span>
-                      : <span className="rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] text-rose-300">unacknowledged</span>}
-                    <span className="ml-auto text-xs text-white/45">firing {since(a.started_at)}</span>
-                  </div>
-
-                  <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-white/60">
-                    <span className="rounded bg-white/[0.05] px-2 py-0.5 font-mono text-[11px] text-white/70">
-                      {r ? ruleDef(r) : "rule condition"}
-                    </span>
-                    <span className="text-white/30">·</span>
-                    <span>observed <span className="font-medium text-rose-300">{a.observed_value}{unit}</span></span>
-                    {r && <><span className="text-white/30">·</span><span>sustained {r.for_minutes}m</span></>}
-                    {r && <><span className="text-white/30">·</span><span>{notifyText(r)}</span></>}
-                    <span className="text-white/30">·</span>
-                    <span>{a.service ?? "all services"}</span>
-                  </div>
-
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    {!ackd && (
-                      <button disabled={busy === a.id} onClick={() => act(a.id, "acknowledge")}
-                        className="rounded-lg border border-amber-400/40 bg-amber-500/15 px-3 py-1 text-xs text-amber-200 hover:bg-amber-500/25">Acknowledge</button>
-                    )}
-                    <button disabled={busy === a.id} onClick={() => act(a.id, "resolve")}
-                      className="rounded-lg border border-emerald-400/40 bg-emerald-500/15 px-3 py-1 text-xs text-emerald-200 hover:bg-emerald-500/25">Resolve</button>
-                    <a href={`/incidents/${a.id}`}
-                      className="rounded-lg border border-white/15 px-3 py-1 text-xs text-white/70 hover:bg-white/5">Open incident →</a>
-                  </div>
-                </div>
-              </div>
+    <div className="mb-8 space-y-6">
+      {lanes.map((lane) => {
+        const laneAlerts = shown.filter((a) => a.severity === lane);
+        if (laneAlerts.length === 0) return null;
+        const lm = laneMeta[lane];
+        return (
+          <div key={lane}>
+            <div className="mb-2 flex items-center gap-3">
+              <span className={`text-xs font-bold uppercase tracking-[0.2em] ${lm.text}`}>{lm.label}</span>
+              <span className="text-[11px] text-white/35">{laneAlerts.length}</span>
+              <span className={`h-px flex-1 ${lm.rule}`} />
             </div>
-          );
-        })}
-      </div>
+            <div className="space-y-2">
+              {laneAlerts.map((a) => {
+                const r = ruleFor(a);
+                const ackd = a.acknowledged_at != null;
+                const unit = a.kind === "error_rate" ? "%" : a.kind.startsWith("latency") ? "ms" : "";
+                return (
+                  <div key={a.id} className="rounded-lg border border-white/10 bg-white/[0.02] px-4 py-3">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <span className={`h-1.5 w-1.5 rounded-full ${lm.rule.replace("/40", "")}`} />
+                      <span className="font-medium text-white/90">{a.rule_name}</span>
+                      <span className="text-xs text-white/45">{a.service ?? "all services"}</span>
+                      {ackd
+                        ? <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] text-amber-300">ack</span>
+                        : <span className="rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] text-rose-300">unack</span>}
+                      <span className="ml-auto text-xs text-white/45">open {since(a.started_at)}</span>
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-xs">
+                      <span>
+                        <span className="text-white/35">Current: </span>
+                        <span className="font-semibold text-rose-300">{a.observed_value}{unit}</span>
+                      </span>
+                      <span>
+                        <span className="text-white/35">Threshold: </span>
+                        <span className="text-white/70">{a.threshold}{unit}</span>
+                      </span>
+                      {r && <span><span className="text-white/35">Sustained: </span><span className="text-white/70">{r.for_minutes}m</span></span>}
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      {!ackd && (
+                        <button disabled={busy === a.id} onClick={() => act(a.id, "acknowledge")}
+                          className="rounded-lg border border-amber-400/40 bg-amber-500/15 px-3 py-1 text-xs text-amber-200 hover:bg-amber-500/25">Acknowledge</button>
+                      )}
+                      <button disabled={busy === a.id} onClick={() => act(a.id, "resolve")}
+                        className="rounded-lg border border-emerald-400/40 bg-emerald-500/15 px-3 py-1 text-xs text-emerald-200 hover:bg-emerald-500/25">Resolve</button>
+                      <a href={`/incidents/${a.id}`}
+                        className="rounded-lg border border-white/15 px-3 py-1 text-xs text-white/70 hover:bg-white/5">Open incident →</a>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -269,6 +299,7 @@ export default function AlertsPage() {
   const [rules, setRules] = useState<AlertRule[]>([]);
   const [incidents, setIncidents] = useState<IncidentRow[]>([]);
   const [minutes, setMinutes] = useState(60);
+  const [metrics, setMetrics] = useState<{ mtta_seconds: number | null; mttr_seconds: number | null } | null>(null);
   const [alertFilter, setAlertFilter] = useState<"all" | "info" | "warning" | "critical" | "ack">("all");
   const [err, setErr] = useState<string | null>(null);
   const [modal, setModal] = useState<{ open: boolean; rule: AlertRule | null }>({ open: false, rule: null });
@@ -276,6 +307,8 @@ export default function AlertsPage() {
   const load = useCallback(() => {
     apiGet<IncidentRow[]>("/api/v1/alerts/incidents?limit=200")
       .then(setIncidents).catch(() => {});
+    apiGet<{ mtta_seconds: number | null; mttr_seconds: number | null }>("/api/v1/alerts/metrics")
+      .then(setMetrics).catch(() => {});
     return apiGet<AlertRule[]>("/api/v1/alerts/rules")
       .then((r) => { setRules(r); setErr(null); })
       .catch((e: Error) => setErr(e.message));
@@ -321,18 +354,27 @@ export default function AlertsPage() {
 
   return (
     <Shell>
-      <div className="mb-4 flex items-center justify-between">
-        <span className="text-xs uppercase tracking-wide text-white/35">Operational view</span>
-        <RangePicker value={minutes} onChange={setMinutes} />
-      </div>
-
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-6">
-        <AlertStat label="Total" value={sum.total} tone="neutral" active={alertFilter === "all"} onClick={() => setAlertFilter("all")} />
-        <AlertStat label="Info" value={sum.info} tone="info" active={alertFilter === "info"} onClick={() => setAlertFilter("info")} />
-        <AlertStat label="Warning" value={sum.warning} tone="warning" active={alertFilter === "warning"} onClick={() => setAlertFilter("warning")} />
-        <AlertStat label="Critical" value={sum.critical} tone="critical" active={alertFilter === "critical"} onClick={() => setAlertFilter("critical")} />
-        <AlertStat label="Acknowledged" value={sum.acknowledged} tone="ack" active={alertFilter === "ack"} onClick={() => setAlertFilter("ack")} />
-        <AlertStat label="Resolved" value={sum.resolved} tone="resolved" href="/incidents" />
+      <div className="mb-6 overflow-hidden rounded-xl border border-white/10 bg-gradient-to-b from-white/[0.04] to-transparent">
+        <div className="flex items-center justify-between border-b border-white/10 px-5 py-3">
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400/60" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-rose-500" />
+            </span>
+            <h1 className="text-sm font-semibold uppercase tracking-wider text-white/80">Alert Operations Center</h1>
+          </div>
+          <RangePicker value={minutes} onChange={setMinutes} />
+        </div>
+        <div className="grid grid-cols-2 gap-px bg-white/5 sm:grid-cols-4 lg:grid-cols-8">
+          <KpiCell label="Critical" value={sum.critical} tone="critical" active={alertFilter === "critical"} onClick={() => setAlertFilter(alertFilter === "critical" ? "all" : "critical")} />
+          <KpiCell label="Warning" value={sum.warning} tone="warning" active={alertFilter === "warning"} onClick={() => setAlertFilter(alertFilter === "warning" ? "all" : "warning")} />
+          <KpiCell label="Info" value={sum.info} tone="info" active={alertFilter === "info"} onClick={() => setAlertFilter(alertFilter === "info" ? "all" : "info")} />
+          <KpiCell label="Open" value={sum.total - sum.resolved} tone="neutral" />
+          <KpiCell label="Acknowledged" value={sum.acknowledged} tone="ack" active={alertFilter === "ack"} onClick={() => setAlertFilter(alertFilter === "ack" ? "all" : "ack")} />
+          <KpiCell label="Resolved" value={sum.resolved} tone="resolved" href="/incidents" />
+          <KpiCell label="MTTA (7d)" value={fmtDur(metrics?.mtta_seconds)} tone="neutral" />
+          <KpiCell label="MTTR (7d)" value={fmtDur(metrics?.mttr_seconds)} tone="neutral" />
+        </div>
       </div>
 
       <FiringAlerts minutes={minutes} filter={alertFilter} rules={rules} />

@@ -172,6 +172,42 @@ def test_rule_webhook(
     return {"sent": results}
 
 
+@router.get("/metrics")
+def alert_metrics(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Operational metrics: MTTA (mean time to acknowledge) and MTTR (mean time
+    to resolve), computed from incident timestamps over the last 7 days."""
+    since_ts = datetime.now(timezone.utc) - timedelta(days=7)
+    incidents = db.scalars(
+        select(Incident).where(
+            Incident.organization_id == user.organization_id,
+            Incident.started_at >= since_ts,
+        )
+    ).all()
+
+    ack_deltas = [
+        (i.acknowledged_at - i.started_at).total_seconds()
+        for i in incidents if i.acknowledged_at is not None
+    ]
+    res_deltas = [
+        (i.resolved_at - i.started_at).total_seconds()
+        for i in incidents if i.resolved_at is not None
+    ]
+
+    mtta = round(sum(ack_deltas) / len(ack_deltas)) if ack_deltas else None
+    mttr = round(sum(res_deltas) / len(res_deltas)) if res_deltas else None
+
+    return {
+        "mtta_seconds": mtta,
+        "mttr_seconds": mttr,
+        "sample_acked": len(ack_deltas),
+        "sample_resolved": len(res_deltas),
+    }
+
+
+
 @router.get("/incidents", response_model=list[IncidentOut])
 def list_incidents(
     status: str | None = Query(None, pattern="^(firing|resolved)$"),
