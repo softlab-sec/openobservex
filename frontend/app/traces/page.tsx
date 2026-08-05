@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Shell, { usePoll } from "@/components/Shell";
 import { Badge, Card, RangePicker, colorFor } from "@/components/ui";
 import Waterfall from "@/components/Waterfall";
@@ -13,9 +14,18 @@ import {
   type TraceRow,
 } from "@/lib/api";
 
-export default function TracesPage() {
+function TracesInner() {
+  const searchParams = useSearchParams();
   const [minutes, setMinutes] = useState(60);
   const [errorsOnly, setErrorsOnly] = useState(false);
+  const [service, setService] = useState<string | null>(null);
+
+  useEffect(() => {
+    const svc = searchParams.get("service");
+    const mins = searchParams.get("minutes");
+    if (svc) setService(svc);
+    if (mins) { const n = parseInt(mins, 10); if (!Number.isNaN(n)) setMinutes(n); }
+  }, [searchParams]);
   const [rows, setRows] = useState<TraceRow[]>([]);
   const [selected, setSelected] = useState<TraceDetail | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -25,16 +35,16 @@ export default function TracesPage() {
 
   const load = useCallback(() => {
     return apiGet<{ items: TraceRow[] }>(
-      `/api/v1/traces?minutes=${minutes}&limit=100&errors_only=${errorsOnly}`
+      `/api/v1/traces?minutes=${minutes}&limit=100&errors_only=${errorsOnly}${service ? `&service=${encodeURIComponent(service)}` : ""}`
     )
       .then((d) => {
         setRows(d.items);
         setErr(null);
       })
       .catch((e: Error) => setErr(e.message));
-  }, [minutes, errorsOnly]);
+  }, [minutes, errorsOnly, service]);
 
-  usePoll(load, [minutes, errorsOnly]);
+  usePoll(load, [minutes, errorsOnly, service]);
 
   function analyze(id: string) {
     setAiLoading(true);
@@ -61,6 +71,12 @@ export default function TracesPage() {
           <p className="text-sm text-white/40">Click a trace to see its waterfall</p>
         </div>
         <div className="flex items-center gap-3">
+          {service && (
+            <span className="inline-flex items-center gap-1.5 rounded-lg border border-sky-400/30 bg-sky-500/10 px-2.5 py-1 text-xs text-sky-300">
+              {service}
+              <button onClick={() => setService(null)} className="text-sky-300/60 hover:text-sky-200" aria-label="Clear service filter">✕</button>
+            </span>
+          )}
           <button
             onClick={() => setErrorsOnly((v) => !v)}
             className={`rounded-lg border px-2.5 py-1 text-xs transition ${
@@ -175,5 +191,13 @@ export default function TracesPage() {
         </div>
       </Card>
     </Shell>
+  );
+}
+
+export default function TracesPage() {
+  return (
+    <Suspense fallback={<Shell><p className="text-sm text-white/40">Loading traces…</p></Shell>}>
+      <TracesInner />
+    </Suspense>
   );
 }
