@@ -230,6 +230,8 @@ export type MapEdge = {
   calls: number;
   errors: number;
   avg_ms: number;
+  p95_ms: number;
+  error_pct: number;
 };
 
 export type LatencySample = {
@@ -271,8 +273,15 @@ export type IncidentSummary = {
   suggested_next_steps: string[];
 };
 
+export type MapNode = {
+  id: string;
+  calls: number;
+  error_pct: number;
+  p95_ms: number;
+  health: "healthy" | "degraded" | "failing";
+};
 export type ServiceMap = {
-  nodes: string[];
+  nodes: MapNode[];
   edges: MapEdge[];
 };
 

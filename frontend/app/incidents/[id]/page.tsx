@@ -264,7 +264,7 @@ export default function IncidentDetailPage({ params }: { params: Promise<{ id: s
           {tab === "traces" && <WorkspaceLink href={`/traces${q}`} label="Open filtered traces" sub={svc ? `${svc}, last ${win}m` : `last ${win}m`} />}
           {tab === "logs" && <WorkspaceLink href={`/logs${q}`} label="Open filtered logs" sub={svc ? `${svc}, last ${win}m` : `last ${win}m`} />}
           {tab === "metrics" && <WorkspaceLink href={`/dashboard${q}`} label="Open service metrics" sub={svc ? `${svc}, last ${win}m` : `last ${win}m`} />}
-          <WorkspaceLink href="/map" label="Open dependency map" sub="service topology" />
+          <WorkspaceLink href={svc ? `/map?focus=${encodeURIComponent(svc)}&from=${id}` : "/map"} label="Open dependency map" sub={svc ? `blast radius for ${svc}` : "service topology"} />
         </div>
       </div>
 

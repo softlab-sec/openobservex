@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   Background,
@@ -31,18 +32,27 @@ type NodeData = {
 
 function ServiceNode({ data }: { data: NodeData }) {
   const [hover, setHover] = useState(false);
-  const bad = data.errorRate > 2;
+  const health = data.health ?? "healthy";
+  const isRoot = data.isRoot ?? false;
+  const dim = data.dim ?? false;
+  const isFocus = data.isFocus ?? false;
+  const box =
+    health === "failing"
+      ? "border-red-400/70 bg-red-500/10 hover:border-red-300 shadow-[0_0_20px_-4px_rgba(248,113,113,0.5)]"
+      : health === "degraded"
+      ? "border-amber-400/60 bg-amber-500/[0.07] hover:border-amber-300"
+      : isRoot
+      ? "border-sky-400/30 bg-[#141b28] hover:border-sky-300/50"
+      : "border-emerald-400/25 bg-[#151b26] hover:border-emerald-300/50";
   return (
     <div
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       onClick={() => data.onOpen(data.label)}
-      className={`relative cursor-pointer rounded-xl border px-4 py-3 text-center shadow-lg transition ${
-        bad
-          ? "border-red-400/60 bg-red-500/10 hover:border-red-300"
-          : "border-white/15 bg-[#151b26] hover:border-white/40"
+      className={`relative cursor-pointer rounded-xl border px-4 py-3 text-center shadow-lg transition ${box} ${
+        isFocus ? "ring-2 ring-sky-300/80 ring-offset-2 ring-offset-[#0b0f17]" : ""
       }`}
-      style={{ minWidth: 150 }}
+      style={{ minWidth: 150, opacity: dim ? 0.28 : 1 }}
     >
       <Handle type="target" position={Position.Left} className="!bg-white/30" />
       <div className="flex items-center justify-center gap-2">
@@ -53,12 +63,18 @@ function ServiceNode({ data }: { data: NodeData }) {
         <span className="text-sm font-medium text-white/90">{data.label}</span>
       </div>
       <div className="mt-1 text-[11px] text-white/45">
-        {data.calls.toLocaleString()} calls
-        {data.errorRate > 0 && (
-          <span className={bad ? "text-red-300" : "text-amber-300"}>
-            {" "}
-            · {data.errorRate}% err
-          </span>
+        {isRoot ? (
+          <span className="text-sky-300/70">entry point · {data.calls.toLocaleString()} calls</span>
+        ) : (
+          <>
+            {data.calls.toLocaleString()} calls
+            {data.nodeErrorPct > 0 && (
+              <span className={health === "failing" ? "text-red-300" : "text-amber-300"}>
+                {" "}· {data.nodeErrorPct}% err
+              </span>
+            )}
+            {data.p95_ms > 0 && <span className="text-white/40"> · p95 {data.p95_ms}ms</span>}
+          </>
         )}
       </div>
       <Handle type="source" position={Position.Right} className="!bg-white/30" />
@@ -72,7 +88,7 @@ function ServiceNode({ data }: { data: NodeData }) {
           </div>
           <div className="flex justify-between text-white/50">
             <span>error rate</span>
-            <span className={bad ? "text-red-300" : "text-white/70"}>
+            <span className={health === "failing" ? "text-red-300" : health === "degraded" ? "text-amber-300" : "text-white/70"}>
               {data.errorRate}%
             </span>
           </div>
@@ -245,7 +261,10 @@ function Empty({ children }: { children: React.ReactNode }) {
   return <div className="px-2 py-1 text-sm text-white/30">{children}</div>;
 }
 
-export default function ServiceMapPage() {
+function ServiceMapInner() {
+  const searchParams = useSearchParams();
+  const focus = searchParams.get("focus");
+  const fromIncident = searchParams.get("from");
   const [minutes, setMinutes] = useState(60);
   const [app, setApp] = useState("all");
   const [apps, setApps] = useState<Application[]>([]);
@@ -296,7 +315,31 @@ export default function ServiceMapPage() {
           calls[e.source] = calls[e.source] ?? 0;
         });
 
-        const placed = layout(data.nodes, data.edges);
+        const nodeById: Record<string, typeof data.nodes[number]> = {};
+        data.nodes.forEach((n) => (nodeById[n.id] = n));
+
+        // Blast radius: walk edges up (callers = victims) and down (callees = causes)
+        // from the focused service. Fully derived from real edges, not hardcoded.
+        const inBlast = new Set<string>();
+        if (focus) {
+          inBlast.add(focus);
+          const down: Record<string, string[]> = {};
+          const up: Record<string, string[]> = {};
+          data.edges.forEach((e) => {
+            (down[e.source] ??= []).push(e.target);
+            (up[e.target] ??= []).push(e.source);
+          });
+          const walk = (start: string, adj: Record<string, string[]>) => {
+            const q = [start];
+            while (q.length) {
+              const n = q.shift()!;
+              (adj[n] ?? []).forEach((m) => { if (!inBlast.has(m)) { inBlast.add(m); q.push(m); } });
+            }
+          };
+          walk(focus, down);
+          walk(focus, up);
+        }
+        const placed = layout(data.nodes.map((n) => n.id), data.edges);
         const rn: Node[] = placed.map((p) => {
           const c = calls[p.id] ?? 0;
           const e = errs[p.id] ?? 0;
@@ -308,6 +351,12 @@ export default function ServiceMapPage() {
               label: p.id,
               calls: c,
               errorRate: c ? Math.round((e / c) * 1000) / 10 : 0,
+              health: nodeById[p.id]?.health ?? "healthy",
+              p95_ms: nodeById[p.id]?.p95_ms ?? 0,
+              nodeErrorPct: nodeById[p.id]?.error_pct ?? 0,
+              isRoot: (nodeById[p.id]?.calls ?? 0) === 0 || !data.edges.some((ed) => ed.target === p.id),
+              isFocus: focus === p.id,
+              dim: focus ? !inBlast.has(p.id) : false,
               onOpen: openService,
             },
           };
@@ -315,22 +364,26 @@ export default function ServiceMapPage() {
 
         const maxCalls = Math.max(...data.edges.map((e) => e.calls), 1);
         const re: Edge[] = data.edges.map((e, i) => {
-          const bad = e.calls > 0 && e.errors / e.calls > 0.02;
+          const ep = e.error_pct ?? 0;
+          const failing = ep >= 5;
+          const degraded = ep >= 1 && ep < 5;
+          const stroke = failing ? "#f87171" : degraded ? "#fbbf24" : "#38bdf8";
+          const edgeDim = focus ? !(inBlast.has(e.source) && inBlast.has(e.target)) : false;
           return {
             id: `e${i}`,
             source: e.source,
             target: e.target,
-            animated: bad,
-            label: `${e.calls} · ${e.avg_ms}ms`,
+            animated: failing,
+            label: ep > 0 ? `${e.calls} · ${ep}% err · p95 ${e.p95_ms}ms` : `${e.calls} · p95 ${e.p95_ms}ms`,
             labelStyle: { fill: "#ffffff70", fontSize: 10 },
             labelBgStyle: { fill: "#0b0f17", fillOpacity: 0.85 },
             labelBgPadding: [4, 2] as [number, number],
             labelBgBorderRadius: 4,
             type: "smoothstep",
             style: {
-              stroke: bad ? "#f87171" : "#38bdf8",
+              stroke,
               strokeWidth: 1.5 + (e.calls / maxCalls) * 4,
-              opacity: 0.6,
+              opacity: edgeDim ? 0.12 : failing ? 0.85 : 0.55,
             },
           };
         });
@@ -350,6 +403,7 @@ export default function ServiceMapPage() {
         edges={edges}
         nodeTypes={nodeTypes}
         fitView
+        fitViewOptions={focus ? { nodes: [{ id: focus }], duration: 600, padding: 0.4, maxZoom: 1.3 } : { padding: 0.15 }}
         proOptions={{ hideAttribution: true }}
         nodesDraggable
         minZoom={0.2}
@@ -364,6 +418,26 @@ export default function ServiceMapPage() {
 
   return (
     <Shell>
+      {focus && (
+        <div className="mb-4 flex items-center justify-between rounded-xl border border-rose-400/25 bg-rose-500/[0.06] px-4 py-3">
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400/60" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-rose-500" />
+            </span>
+            <span className="text-sm text-white/85">
+              Blast radius for <span className="font-semibold text-rose-200">{focus}</span>
+              <span className="text-white/40"> · incident context</span>
+            </span>
+          </div>
+          {fromIncident && (
+            <a href={`/incidents/${fromIncident}`}
+              className="inline-flex items-center gap-1 rounded-lg border border-white/15 px-3 py-1 text-xs text-white/70 transition hover:bg-white/[0.06]">
+              <span>←</span> Back to incident
+            </a>
+          )}
+        </div>
+      )}
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Service map</h1>
@@ -417,5 +491,13 @@ export default function ServiceMapPage() {
         )}
       </div>
     </Shell>
+  );
+}
+
+export default function ServiceMapPage() {
+  return (
+    <Suspense fallback={<Shell><p className="text-sm text-white/40">Loading map…</p></Shell>}>
+      <ServiceMapInner />
+    </Suspense>
   );
 }

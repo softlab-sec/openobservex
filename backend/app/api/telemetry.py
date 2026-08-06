@@ -261,7 +261,9 @@ def stats_service_map(
             c.ServiceName                       AS target,
             count()                             AS calls,
             countIf(c.StatusCode = 'Error')     AS errors,
-            round(avg(c.Duration) / 1000000, 2) AS avg_ms
+            round(avg(c.Duration) / 1000000, 2) AS avg_ms,
+            round(quantile(0.95)(c.Duration) / 1000000, 1) AS p95_ms,
+            round(100 * countIf(c.StatusCode = 'Error') / greatest(count(), 1), 2) AS error_pct
         FROM otel_traces AS c
         INNER JOIN otel_traces AS p
           ON c.ParentSpanId = p.SpanId AND c.TraceId = p.TraceId
@@ -274,7 +276,32 @@ def stats_service_map(
         LIMIT 100
     """
     edges = _rows(ch_query_scoped(query, {"mins": minutes}, app_namespace=app))
-    nodes = sorted({e["source"] for e in edges} | {e["target"] for e in edges})
+
+    # Build node objects with health aggregated from INBOUND edges (a service's
+    # health as seen by its callers). Services that only appear as a source
+    # (e.g. the entry gateway) still get a node with neutral health.
+    node_ids = sorted({e["source"] for e in edges} | {e["target"] for e in edges})
+    nodes = []
+    for nid in node_ids:
+        inbound = [e for e in edges if e["target"] == nid]
+        total_calls = sum(int(e["calls"]) for e in inbound)
+        total_errors = sum(int(e["errors"]) for e in inbound)
+        err_pct = round(100 * total_errors / total_calls, 2) if total_calls else 0.0
+        # worst inbound p95 as the node's latency signal
+        p95 = max((float(e.get("p95_ms") or 0) for e in inbound), default=0.0)
+        if err_pct >= 5:
+            health = "failing"
+        elif err_pct >= 1:
+            health = "degraded"
+        else:
+            health = "healthy"
+        nodes.append({
+            "id": nid,
+            "calls": total_calls,
+            "error_pct": err_pct,
+            "p95_ms": p95,
+            "health": health,
+        })
     return {"nodes": nodes, "edges": edges}
 
 
