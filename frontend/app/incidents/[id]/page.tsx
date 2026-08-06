@@ -5,6 +5,7 @@ import { use, useCallback, useEffect, useState } from "react";
 import Shell from "@/components/Shell";
 import { apiGet, apiSend, type IncidentRow, type IncidentEvent, type IncidentEvidence } from "@/lib/api";
 import { sevMeta, since, duration } from "@/lib/severity";
+import IncidentTopology from "@/components/IncidentTopology";
 
 const KIND_LABEL: Record<string, string> = {
   error_rate: "Error rate", latency: "Latency", latency_p95: "Latency p95",
@@ -55,6 +56,7 @@ export default function IncidentDetailPage({ params }: { params: Promise<{ id: s
   const ackd = inc.acknowledged_at != null;
   const an = ev?.analysis;
   const svc = inc.service;
+  const anchorService = svc ?? ev?.affected_services?.[0]?.service ?? null;
   const win = 60;
   const q = svc ? `?service=${encodeURIComponent(svc)}&minutes=${win}` : `?minutes=${win}`;
 
@@ -264,8 +266,13 @@ export default function IncidentDetailPage({ params }: { params: Promise<{ id: s
           {tab === "traces" && <WorkspaceLink href={`/traces${q}`} label="Open filtered traces" sub={svc ? `${svc}, last ${win}m` : `last ${win}m`} />}
           {tab === "logs" && <WorkspaceLink href={`/logs${q}`} label="Open filtered logs" sub={svc ? `${svc}, last ${win}m` : `last ${win}m`} />}
           {tab === "metrics" && <WorkspaceLink href={`/dashboard${q}`} label="Open service metrics" sub={svc ? `${svc}, last ${win}m` : `last ${win}m`} />}
-          <WorkspaceLink href={svc ? `/map?focus=${encodeURIComponent(svc)}&from=${id}` : "/map"} label="Open dependency map" sub={svc ? `blast radius for ${svc}` : "service topology"} />
         </div>
+      </div>
+
+      {/* Service dependency impact — embedded blast-radius topology */}
+      <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-5">
+        <SectionLabel>Service dependency impact</SectionLabel>
+        <IncidentTopology service={anchorService} minutes={win} />
       </div>
 
       {/* 8. COLLABORATION — not configured (honest) */}
