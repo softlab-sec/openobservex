@@ -101,7 +101,7 @@ function CircleNode({ data }: { data: NData }) {
           {roleLabel && <div className="mb-2 text-[10px] uppercase tracking-wide text-white/35">{roleLabel}</div>}
           <div className="space-y-1.5 text-sm">
             <div className="flex justify-between"><span className="text-white/40">Error rate</span><span className={data.errorPct > 0 ? h.text : "text-white/70"}>{data.errorPct}%</span></div>
-            <div className="flex justify-between"><span className="text-white/40">p95 latency</span><span className="text-white/70">{data.p95}ms</span></div>
+            <div className="flex justify-between"><span className="text-white/40">Latency</span><span className="text-white/70">{data.p95}ms</span></div>
             <div className="flex justify-between"><span className="text-white/40">Throughput</span><span className="text-white/70">{data.rps} req/s</span></div>
             <div className="flex justify-between"><span className="text-white/40">Calls ({data.windowMin}m)</span><span className="text-white/70">{data.calls.toLocaleString()}</span></div>
             <div className="flex justify-between"><span className="text-white/40">Active alerts</span><span className="text-white/40">—</span></div>

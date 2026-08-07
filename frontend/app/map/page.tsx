@@ -95,7 +95,7 @@ function ServiceNode({ data }: { data: NodeData }) {
           <div className="space-y-1 text-xs">
             <div className="flex justify-between"><span className="text-white/40">Calls</span><span className="text-white/70">{data.calls.toLocaleString()}</span></div>
             <div className="flex justify-between"><span className="text-white/40">Error rate</span><span className={data.nodeErrorPct > 0 ? hr.text : "text-white/70"}>{data.nodeErrorPct}%</span></div>
-            <div className="flex justify-between"><span className="text-white/40">p95 latency</span><span className="text-white/70">{data.p95_ms}ms</span></div>
+            <div className="flex justify-between"><span className="text-white/40">Latency</span><span className="text-white/70">{data.p95_ms}ms</span></div>
           </div>
           <div className="mt-2 border-t border-white/10 pt-1.5 text-center text-[11px] text-white/35">click for detail</div>
         </div>

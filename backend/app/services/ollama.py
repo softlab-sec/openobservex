@@ -13,6 +13,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Optional, TypeVar
 
+import time
 import httpx
 
 from app.config import settings
@@ -84,9 +85,16 @@ def generate(
 def generate_json(
     prompt: str, system: str, schema: dict[str, Any]
 ) -> dict[str, Any]:
-    raw = generate(prompt, system, schema=schema)
-    try:
-        return json.loads(raw)
-    except json.JSONDecodeError as exc:
-        logger.warning("model returned unparseable JSON: %s", raw[:400])
-        raise OllamaUnavailable("model returned malformed JSON") from exc
+    # One automatic retry: the local model is often warm/free on the second
+    # attempt (cold-start or a concurrent call causes the first to fail).
+    last_exc: Optional[Exception] = None
+    for attempt in range(2):
+        try:
+            raw = generate(prompt, system, schema=schema)
+            return json.loads(raw)
+        except (OllamaUnavailable, json.JSONDecodeError) as exc:
+            last_exc = exc
+            logger.warning("ollama generate_json attempt %d failed: %s", attempt + 1, exc)
+            if attempt == 0:
+                time.sleep(1.5)
+    raise OllamaUnavailable(f"model unavailable after retry: {last_exc}")

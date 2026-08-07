@@ -9,7 +9,7 @@ import { ComposedChart, Area, Line, ReferenceLine, XAxis, YAxis, Tooltip, Respon
 
 const METRIC_LABEL: Record<string, string> = {
   error_rate: "Error rate",
-  p95_latency: "p95 latency",
+  p95_latency: "Latency",
 };
 
 function fmtVal(v: number, metric: string): string {
@@ -264,7 +264,7 @@ export default function AnomalyDetailPage({ params }: { params: Promise<{ id: st
                     ) : (
                       <span className="text-xs text-white/40">{sv.total} calls</span>
                     )}
-                    <span className="w-20 text-right text-xs text-white/50">p95 {sv.p95_ms}ms</span>
+                    <span className="w-20 text-right text-xs text-white/50">{sv.p95_ms}ms</span>
                   </div>
                 ))}
               </div>

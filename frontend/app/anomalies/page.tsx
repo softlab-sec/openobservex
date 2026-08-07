@@ -9,7 +9,7 @@ import { sevMeta, since } from "@/lib/severity";
 
 const METRIC_LABEL: Record<string, string> = {
   error_rate: "Error rate",
-  p95_latency: "p95 latency",
+  p95_latency: "Latency",
 };
 
 function fmtVal(v: number, metric: string): string {

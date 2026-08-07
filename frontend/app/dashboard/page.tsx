@@ -68,6 +68,7 @@ export default function DashboardPage() {
   const [err, setErr] = useState<string | null>(null);
   const [summary, setSummary] = useState<IncidentSummary | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiUnavailable, setAiUnavailable] = useState(false);
 
   const qs = useCallback(
     (extra = "") => {
@@ -130,12 +131,20 @@ export default function DashboardPage() {
   function summarize() {
     setAiLoading(true);
     setSummary(null);
+    setAiUnavailable(false);
     const svc = service ? `&service=${encodeURIComponent(service)}` : "";
-    apiPost<IncidentSummary>(
+    apiPost<IncidentSummary & { status?: string; detail?: string }>(
       `/api/v1/ai/summarize-incident?minutes=${minutes}${svc}`
     )
-      .then(setSummary)
-      .catch((e: Error) => setErr(e.message))
+      .then((data) => {
+        if (data.status === "unavailable") {
+          setAiUnavailable(true);
+          setSummary(null);
+        } else {
+          setSummary(data);
+        }
+      })
+      .catch(() => setAiUnavailable(true))
       .finally(() => setAiLoading(false));
   }
 
@@ -237,6 +246,21 @@ export default function DashboardPage() {
         />
       )}
 
+      {aiUnavailable && (
+        <div className="mb-4 flex items-center justify-between rounded-lg border border-amber-500/25 bg-amber-500/[0.06] p-4">
+          <div className="text-sm text-white/70">
+            <span className="font-medium text-amber-200">AI interpretation is temporarily unavailable.</span>{" "}
+            The dashboard findings below are complete and accurate. The AI summary is optional and can be retried.
+          </div>
+          <button
+            onClick={summarize}
+            disabled={aiLoading}
+            className="ml-4 shrink-0 rounded-lg border border-white/15 px-3 py-1.5 text-sm text-white/80 transition hover:bg-white/[0.08] disabled:opacity-50"
+          >
+            {aiLoading ? "Retrying…" : "Retry"}
+          </button>
+        </div>
+      )}
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-6">
         <Stat
           label="Health"
@@ -256,8 +280,8 @@ export default function DashboardPage() {
           suffix="%"
           tone={ov && ov.error_rate > 5 ? "danger" : "good"}
         />
-        <Stat label="p95" value={ov?.p95_ms ?? "-"} suffix="ms" />
-        <Stat label="p99" value={ov?.p99_ms ?? "-"} suffix="ms" />
+        <Stat label="Slow Response (P95)" value={ov?.p95_ms ?? "-"} suffix="ms" />
+        <Stat label="Worst-Case Response (P99)" value={ov?.p99_ms ?? "-"} suffix="ms" />
       </div>
 
       {trace && (
@@ -321,9 +345,9 @@ export default function DashboardPage() {
               <YAxis {...axis} tickLine={false} width={38} />
               <Tooltip contentStyle={tooltipStyle} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Line type="monotone" dataKey="p50_ms" name="p50" stroke="#34d399" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="p95_ms" name="p95" stroke="#fbbf24" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="p99_ms" name="p99" stroke="#f472b6" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="p50_ms" name="Typical (P50)" stroke="#34d399" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="p95_ms" name="Slow (P95)" stroke="#fbbf24" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="p99_ms" name="Worst-Case (P99)" stroke="#f472b6" strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
         </Card>
@@ -461,8 +485,8 @@ export default function DashboardPage() {
                 <th className="py-2 font-medium">Endpoint</th>
                 <th className="py-2 font-medium">Reqs</th>
                 <th className="py-2 font-medium">Err %</th>
-                <th className="py-2 font-medium">p95</th>
-                <th className="py-2 font-medium">p99</th>
+                <th className="py-2 font-medium">Slow (P95)</th>
+                <th className="py-2 font-medium">Worst-Case (P99)</th>
               </tr>
             </thead>
             <tbody>
@@ -529,7 +553,7 @@ export default function DashboardPage() {
                 <th className="py-2 font-medium">Errors</th>
                 <th className="py-2 font-medium">Error rate</th>
                 <th className="py-2 font-medium">Avg</th>
-                <th className="py-2 font-medium">p95</th>
+                <th className="py-2 font-medium">Slow (P95)</th>
               </tr>
             </thead>
             <tbody>

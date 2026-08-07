@@ -9,8 +9,8 @@ import { sevMeta, sevRank, since, duration } from "@/lib/severity";
 
 const KIND_LABEL: Record<string, string> = {
   error_rate: "Error rate",
-  latency_p95: "Latency p95",
-  latency_p99: "Latency p99",
+  latency_p95: "Latency",
+  latency_p99: "Latency",
   throughput: "Throughput",
 };
 

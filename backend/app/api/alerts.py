@@ -603,7 +603,7 @@ def _anomaly_summary(a, services, triggers):
     """Deterministic executive overview of an anomaly from its evidence.
     Metric-aware: describes the deviation, the dominant operation, blast radius,
     and a plain-language read of what it likely means."""
-    metric_label = "error rate" if a.metric == "error_rate" else "p95 latency"
+    metric_label = "error rate" if a.metric == "error_rate" else "latency"
     unit = "%" if a.metric == "error_rate" else "ms"
     obs = f"{round(a.observed, 1)}{unit}"
     base = f"{round(a.baseline_mean, 1)}{unit}"
@@ -691,7 +691,7 @@ def _anomaly_analysis(a, services, triggers, traces):
     the failure signal is."""
     metric = a.metric
     unit = "%" if metric == "error_rate" else "ms"
-    metric_label = "Error rate" if metric == "error_rate" else "p95 latency"
+    metric_label = "Error rate" if metric == "error_rate" else "Latency"
 
     n_services = len(services)
     n_ops = len(triggers)
@@ -1022,7 +1022,7 @@ def escalate_anomaly(anomaly_id: uuid.UUID, user: User = Depends(get_current_use
         raise HTTPException(status_code=409, detail="anomaly already promoted to an incident")
     if a.status != "active":
         raise HTTPException(status_code=409, detail="only active anomalies can be escalated")
-    metric_label = "error rate" if a.metric == "error_rate" else "p95 latency"
+    metric_label = "error rate" if a.metric == "error_rate" else "latency"
     unit = "%" if a.metric == "error_rate" else "ms"
     summary = (
         f"anomalous {metric_label} on {a.service}: "

@@ -185,7 +185,9 @@ async def analyze_trace(trace_id: str, _user: User = Depends(get_current_user)):
             ollama.generate_json, prompt, SYSTEM, RCA_SCHEMA
         )
     except ollama.OllamaUnavailable as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        logger.warning("analyze-trace AI unavailable: %s", exc)
+        return {"status": "unavailable", "detail": "AI interpretation is temporarily unavailable. The findings are complete; you can retry.", "trace_id": trace_id}
+    result["status"] = "ok"
 
     result["trace_id"] = trace_id
     result["span_count"] = len(spans)
@@ -273,7 +275,7 @@ async def summarize_incident(
         f"Summarise the state of this system over the last {minutes} minutes.\n\n"
         f"{health_note}\n"
         f"TOTALS: {ov.get('requests', 0)} requests, {ov.get('errors', 0)} errors "
-        f"({err_rate}% error rate), p95 latency {ov.get('p95_ms', 0)}ms.\n\n"
+        f"({err_rate}% error rate), latency {ov.get('p95_ms', 0)}ms.\n\n"
         f"FAILING SERVICES:\n{svc_lines}\n\n"
         f"TOP ERROR MESSAGES:\n{pat_lines}\n\n"
         "If the system is healthy, set verdict='healthy' and say so plainly "
@@ -287,7 +289,9 @@ async def summarize_incident(
             ollama.generate_json, prompt, SYSTEM, SUMMARY_SCHEMA
         )
     except ollama.OllamaUnavailable as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        logger.warning("summarize-incident AI unavailable: %s", exc)
+        return {"status": "unavailable", "detail": "AI interpretation is temporarily unavailable. The findings are complete; you can retry.", "window_minutes": minutes}
+    result["status"] = "ok"
 
     result["window_minutes"] = minutes
     result["stats"] = ov
