@@ -8,11 +8,16 @@ import {
   Controls,
   type Edge,
   Handle,
+  MarkerType,
   type Node,
+  NodeToolbar,
   Position,
   ReactFlow,
+  useNodesState,
+  useEdgesState,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import dagre from "@dagrejs/dagre";
 import Shell, { usePoll } from "@/components/Shell";
 import { RangePicker, colorFor } from "@/components/ui";
 import {
@@ -30,71 +35,71 @@ type NodeData = {
   onOpen: (svc: string) => void;
 };
 
+const HEALTH_RING = {
+  failing: { ring: "#f87171", glow: "rgba(248,113,113,0.55)", text: "text-red-300" },
+  degraded: { ring: "#fbbf24", glow: "rgba(251,191,36,0.4)", text: "text-amber-300" },
+  healthy: { ring: "#34d399", glow: "rgba(52,211,153,0.35)", text: "text-emerald-300" },
+};
+
 function ServiceNode({ data }: { data: NodeData }) {
   const [hover, setHover] = useState(false);
-  const health = data.health ?? "healthy";
+  const health = (data.health ?? "healthy") as "healthy" | "degraded" | "failing";
   const isRoot = data.isRoot ?? false;
   const dim = data.dim ?? false;
   const isFocus = data.isFocus ?? false;
-  const box =
-    health === "failing"
-      ? "border-red-400/70 bg-red-500/10 hover:border-red-300 shadow-[0_0_20px_-4px_rgba(248,113,113,0.5)]"
-      : health === "degraded"
-      ? "border-amber-400/60 bg-amber-500/[0.07] hover:border-amber-300"
-      : isRoot
-      ? "border-sky-400/30 bg-[#141b28] hover:border-sky-300/50"
-      : "border-emerald-400/25 bg-[#151b26] hover:border-emerald-300/50";
+  const hr = isRoot ? { ring: "#38bdf8", glow: "rgba(56,189,248,0.35)", text: "text-sky-300" } : HEALTH_RING[health];
+  const dia = isFocus ? 74 : 60;
   return (
     <div
+      className="relative flex items-center justify-center"
+      style={{ width: dia, height: dia, opacity: dim ? 0.28 : 1 }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       onClick={() => data.onOpen(data.label)}
-      className={`relative cursor-pointer rounded-xl border px-4 py-3 text-center shadow-lg transition ${box} ${
-        isFocus ? "ring-2 ring-sky-300/80 ring-offset-2 ring-offset-[#0b0f17]" : ""
-      }`}
-      style={{ minWidth: 150, opacity: dim ? 0.28 : 1 }}
     >
-      <Handle type="target" position={Position.Left} className="!bg-white/30" />
-      <div className="flex items-center justify-center gap-2">
-        <span
-          className="inline-block h-2.5 w-2.5 rounded-full"
-          style={{ background: colorFor(data.label) }}
-        />
-        <span className="text-sm font-medium text-white/90">{data.label}</span>
+      <Handle type="target" position={Position.Left} className="!h-1.5 !w-1.5 !min-w-0 !border-0 !bg-white/40" style={{ left: -2 }} />
+      <div
+        className="flex cursor-pointer items-center justify-center rounded-full transition"
+        style={{
+          width: dia,
+          height: dia,
+          background: "#0f1622",
+          border: `${isFocus ? 4 : 3}px solid ${hr.ring}`,
+          boxShadow: `0 0 ${isFocus ? 28 : 14}px -4px ${hr.glow}${isFocus ? ", 0 0 0 4px rgba(56,189,248,0.25)" : ""}`,
+        }}
+      >
+        <span className="text-xs font-bold text-white">
+          {!isRoot && data.nodeErrorPct > 0 ? `${data.nodeErrorPct}%` : ""}
+        </span>
       </div>
-      <div className="mt-1 text-[11px] text-white/45">
-        {isRoot ? (
-          <span className="text-sky-300/70">entry point · {data.calls.toLocaleString()} calls</span>
-        ) : (
-          <>
-            {data.calls.toLocaleString()} calls
-            {data.nodeErrorPct > 0 && (
-              <span className={health === "failing" ? "text-red-300" : "text-amber-300"}>
-                {" "}· {data.nodeErrorPct}% err
-              </span>
-            )}
-            {data.p95_ms > 0 && <span className="text-white/40"> · p95 {data.p95_ms}ms</span>}
-          </>
-        )}
+      <div className="absolute left-1/2 top-full mt-1.5 w-[170px] -translate-x-1/2 text-center pointer-events-none">
+        <div className="truncate text-sm font-bold text-white">{data.label}</div>
+        <div className={`text-[12px] font-medium ${isRoot ? "text-sky-300/70" : data.nodeErrorPct > 0 ? hr.text : "text-white/50"}`}>
+          {isRoot ? `entry · ${data.calls.toLocaleString()} calls` : `${data.calls.toLocaleString()} calls · p95 ${data.p95_ms}ms`}
+        </div>
       </div>
-      <Handle type="source" position={Position.Right} className="!bg-white/30" />
+      <Handle type="source" position={Position.Right} className="!h-1.5 !w-1.5 !min-w-0 !border-0 !bg-white/40" style={{ right: -2 }} />
 
-      {hover && (
-        <div className="absolute left-1/2 top-full z-10 mt-2 w-44 -translate-x-1/2 rounded-lg border border-white/15 bg-[#0b0f17] p-2 text-left text-[11px] shadow-xl">
-          <div className="mb-1 font-medium text-white/80">{data.label}</div>
-          <div className="flex justify-between text-white/50">
-            <span>calls</span>
-            <span className="tabular-nums">{data.calls.toLocaleString()}</span>
-          </div>
-          <div className="flex justify-between text-white/50">
-            <span>error rate</span>
-            <span className={health === "failing" ? "text-red-300" : health === "degraded" ? "text-amber-300" : "text-white/70"}>
-              {data.errorRate}%
+      <NodeToolbar isVisible={hover} position={data.flipUp ? Position.Top : Position.Bottom} offset={12}>
+        <div className="w-64 rounded-xl border border-white/20 bg-[#0b0f17] p-3 text-left shadow-2xl">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span className="truncate text-sm font-bold text-white">{data.label}</span>
+            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+              isRoot ? "bg-sky-500/15 text-sky-300"
+              : health === "failing" ? "bg-red-500/15 text-red-300"
+              : health === "degraded" ? "bg-amber-500/15 text-amber-300"
+              : "bg-emerald-500/15 text-emerald-300"}`}>
+              {isRoot ? "Entry point" : health === "failing" ? "Failing" : health === "degraded" ? "Degraded" : "Healthy"}
             </span>
           </div>
-          <div className="mt-1 text-center text-white/30">click for detail</div>
+          <div className="space-y-1 text-xs">
+            <div className="flex justify-between"><span className="text-white/40">Calls</span><span className="text-white/70">{data.calls.toLocaleString()}</span></div>
+            <div className="flex justify-between"><span className="text-white/40">Error rate</span><span className={data.nodeErrorPct > 0 ? hr.text : "text-white/70"}>{data.nodeErrorPct}%</span></div>
+            <div className="flex justify-between"><span className="text-white/40">p95 latency</span><span className="text-white/70">{data.p95_ms}ms</span></div>
+          </div>
+          <div className="mt-2 border-t border-white/10 pt-1.5 text-center text-[11px] text-white/35">click for detail</div>
         </div>
-      )}
+      </NodeToolbar>
     </div>
   );
 }
@@ -102,34 +107,16 @@ function ServiceNode({ data }: { data: NodeData }) {
 const nodeTypes = { service: ServiceNode };
 
 function layout(nodes: string[], edges: MapEdge[]) {
-  const targets = new Set(edges.map((e) => e.target));
-  const bySource: Record<string, string[]> = {};
-  edges.forEach((e) => (bySource[e.source] ??= []).push(e.target));
-
-  const depth: Record<string, number> = {};
-  const roots = nodes.filter((n) => !targets.has(n));
-  const queue: [string, number][] = (roots.length ? roots : nodes.slice(0, 1)).map(
-    (n) => [n, 0]
-  );
-  const seen = new Set<string>();
-  while (queue.length) {
-    const [n, d] = queue.shift()!;
-    if (seen.has(n)) {
-      depth[n] = Math.max(depth[n] ?? 0, d);
-      continue;
-    }
-    seen.add(n);
-    depth[n] = d;
-    (bySource[n] ?? []).forEach((t) => queue.push([t, d + 1]));
-  }
-  nodes.forEach((n) => (depth[n] ??= 0));
-
-  const perCol: Record<number, number> = {};
+  const NW = 150, NH = 90;
+  const g = new dagre.graphlib.Graph();
+  g.setDefaultEdgeLabel(() => ({}));
+  g.setGraph({ rankdir: "LR", nodesep: 60, ranksep: 100, marginx: 40, marginy: 40 });
+  nodes.forEach((n) => g.setNode(n, { width: NW, height: NH }));
+  edges.forEach((e) => { if (e.source !== e.target) g.setEdge(e.source, e.target); });
+  dagre.layout(g);
   return nodes.map((n) => {
-    const col = depth[n];
-    const row = perCol[col] ?? 0;
-    perCol[col] = row + 1;
-    return { id: n, col, row };
+    const pos = g.node(n);
+    return { id: n, x: pos.x - NW / 2, y: pos.y - NH / 2 };
   });
 }
 
@@ -268,8 +255,8 @@ function ServiceMapInner() {
   const [minutes, setMinutes] = useState(60);
   const [app, setApp] = useState("all");
   const [apps, setApps] = useState<Application[]>([]);
-  const [nodes, setNodes] = useState<Node[]>([]);
-  const [edges, setEdges] = useState<Edge[]>([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [empty, setEmpty] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -340,14 +327,17 @@ function ServiceMapInner() {
           walk(focus, up);
         }
         const placed = layout(data.nodes.map((n) => n.id), data.edges);
+        const ys = placed.map((pl) => pl.y);
+        const midY = ys.length ? (Math.min(...ys) + Math.max(...ys)) / 2 : 0;
         const rn: Node[] = placed.map((p) => {
           const c = calls[p.id] ?? 0;
           const e = errs[p.id] ?? 0;
           return {
             id: p.id,
             type: "service",
-            position: { x: p.col * 300, y: p.row * 130 },
+            position: { x: p.x, y: p.y },
             data: {
+              flipUp: p.y > midY,
               label: p.id,
               calls: c,
               errorRate: c ? Math.round((e / c) * 1000) / 10 : 0,
@@ -379,7 +369,13 @@ function ServiceMapInner() {
             labelBgStyle: { fill: "#0b0f17", fillOpacity: 0.85 },
             labelBgPadding: [4, 2] as [number, number],
             labelBgBorderRadius: 4,
-            type: "smoothstep",
+            type: "default",
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+              color: stroke,
+              width: 20,
+              height: 20,
+            },
             style: {
               stroke,
               strokeWidth: 1.5 + (e.calls / maxCalls) * 4,
@@ -401,6 +397,8 @@ function ServiceMapInner() {
       <ReactFlow
         nodes={nodes}
         edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
         nodeTypes={nodeTypes}
         fitView
         fitViewOptions={focus ? { nodes: [{ id: focus }], duration: 600, padding: 0.4, maxZoom: 1.3 } : { padding: 0.15 }}
@@ -410,7 +408,7 @@ function ServiceMapInner() {
         maxZoom={2}
       >
         <Background color="#ffffff10" gap={22} />
-        <Controls className="!bg-[#151b26] !border-white/10" />
+        <Controls className="!bg-black/70 !border-white/20 [&_button]:!bg-black/60 [&_button]:!border-white/15 [&_button:hover]:!bg-white/10 [&_button]:!fill-white/80" />
       </ReactFlow>
     ),
     [nodes, edges]
@@ -470,7 +468,7 @@ function ServiceMapInner() {
 
       <div
         className="relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.02]"
-        style={{ height: "74vh" }}
+        style={{ height: "calc(100vh - 150px)" }}
       >
         {empty ? (
           <div className="flex h-full items-center justify-center text-sm text-white/30">

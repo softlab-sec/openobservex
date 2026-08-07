@@ -87,7 +87,7 @@ function CircleNode({ data }: { data: NData }) {
       </div>
       <Handle type="source" position={Position.Right} className="!h-1.5 !w-1.5 !min-w-0 !border-0 !bg-white/40" style={{ right: -2 }} />
 
-      <NodeToolbar isVisible={hover} position={Position.Bottom} offset={12}>
+      <NodeToolbar isVisible={hover} position={data.flipUp ? Position.Top : Position.Bottom} offset={12}>
         <div className="w-72 rounded-xl border border-white/20 bg-[#0b0f17] p-4 text-left shadow-2xl">
           <div className="mb-2 flex items-center justify-between gap-2">
             <span className="truncate text-base font-bold text-white">{data.label}</span>
@@ -124,10 +124,17 @@ function layoutDagre(rn: Node[], re: Edge[]): Node[] {
   rn.forEach((n) => g.setNode(n.id, { width: NODE_W, height: NODE_H }));
   re.forEach((e) => g.setEdge(e.source, e.target));
   dagre.layout(g);
-  return rn.map((n) => {
+  const positioned = rn.map((n) => {
     const p = g.node(n.id);
-    return { ...n, position: { x: p.x - NODE_W / 2, y: p.y - NODE_H / 2 } };
+    return { node: n, y: p.y - NODE_H / 2, x: p.x - NODE_W / 2 };
   });
+  const ys = positioned.map((pp) => pp.y);
+  const midY = ys.length ? (Math.min(...ys) + Math.max(...ys)) / 2 : 0;
+  return positioned.map((pp) => ({
+    ...pp.node,
+    position: { x: pp.x, y: pp.y },
+    data: { ...(pp.node.data as object), flipUp: pp.y > midY },
+  }));
 }
 
 function TopologyGraph({ service, minutes }: { service: string; minutes: number }) {
@@ -233,7 +240,7 @@ function TopologyGraph({ service, minutes }: { service: string; minutes: number 
       zoomOnScroll
     >
       <Background color="#ffffff10" gap={22} />
-      <Controls className="!bg-[#151b26] !border-white/10" showInteractive={false} />
+      <Controls className="!bg-black/70 !border-white/20 [&_button]:!bg-black/60 [&_button]:!border-white/15 [&_button:hover]:!bg-white/10 [&_button]:!fill-white/80" showInteractive={false} />
     </ReactFlow>
   );
 }
