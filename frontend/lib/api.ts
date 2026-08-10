@@ -549,3 +549,16 @@ export type AnomalyEvidence = {
   sample_traces: SampleTrace[];
   trend: AnomalyTrendPoint[];
 };
+
+export type SystemStorageEntry = { rows: number | null; per_min_5m: number | null };
+export type SystemHealth = {
+  generated_at: number;
+  status: "healthy" | "degraded" | "down";
+  clickhouse_up: boolean;
+  clickhouse_query_ms: number | null;
+  postgres_up: boolean;
+  postgres_query_ms: number | null;
+  ingest_lag_seconds: number | null;
+  storage: { traces: SystemStorageEntry; logs: SystemStorageEntry; metrics: SystemStorageEntry };
+  components: Record<string, boolean>;
+};

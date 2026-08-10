@@ -32,6 +32,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/applications", label: "Applications", icon: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z" },
       { href: "/channels", label: "Notifications", icon: "M4 4h16v12H5.2L4 17.2V4z" },
+      { href: "/system", label: "System Health", icon: "M4 12h4l2-5 3 10 2-5h5" },
     ],
   },
 ];
