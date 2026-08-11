@@ -562,3 +562,14 @@ export type SystemHealth = {
   storage: { traces: SystemStorageEntry; logs: SystemStorageEntry; metrics: SystemStorageEntry };
   components: Record<string, boolean>;
 };
+
+export type MaintenanceWindow = {
+  id: string;
+  reason: string;
+  service: string | null;
+  starts_at: string;
+  ends_at: string;
+  created_by: string | null;
+  created_at: string;
+  active: boolean;
+};

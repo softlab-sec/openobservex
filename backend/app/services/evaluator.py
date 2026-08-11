@@ -14,7 +14,7 @@ from sqlalchemy import select
 
 from app.db.clickhouse import ch_query
 from app.db.postgres import SessionLocal
-from app.models import AlertRule, Incident
+from app.models import AlertRule, Incident, MaintenanceWindow
 from app.services import notifications
 
 logger = logging.getLogger(__name__)
@@ -112,7 +112,33 @@ def _notify_channels(db, rule: AlertRule, subject: str, body: str) -> None:
             logger.exception("channel dispatch failed for %s", cid)
 
 
+def _in_maintenance(db, rule: AlertRule) -> bool:
+    """True if an active maintenance window covers this rule right now.
+
+    A window covers the rule when it belongs to the same org, the current
+    time is within [starts_at, ends_at], and the window is either org-wide
+    (service IS NULL) or targets the rule's exact service.
+    """
+    now = datetime.now(timezone.utc)
+    win = db.scalar(
+        select(MaintenanceWindow).where(
+            MaintenanceWindow.organization_id == rule.organization_id,
+            MaintenanceWindow.starts_at <= now,
+            MaintenanceWindow.ends_at >= now,
+            (MaintenanceWindow.service.is_(None))
+            | (MaintenanceWindow.service == rule.service),
+        )
+    )
+    return win is not None
+
+
 def _fire(db, rule: AlertRule, value: float, summary: str) -> None:
+    if _in_maintenance(db, rule):
+        logger.info(
+            "suppressing fire for rule %s (%s): active maintenance window",
+            rule.name, rule.service or "org-wide",
+        )
+        return
     existing = db.scalar(
         select(Incident).where(
             Incident.rule_id == rule.id, Incident.status == "firing"

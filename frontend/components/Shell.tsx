@@ -25,6 +25,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/alerts", label: "Alerts", icon: "M12 3a6 6 0 016 6c0 5 2 7 2 7H4s2-2 2-7a6 6 0 016-6zM10 21h4" },
       { href: "/incidents", label: "Incidents", icon: "M12 9v4m0 4h.01M10.3 3.9L2 18a1 1 0 00.9 1.5h18.2A1 1 0 0022 18L13.7 3.9a1 1 0 00-1.7 0z" },
       { href: "/anomalies", label: "Anomalies", icon: "M3 12h4l2-7 4 14 2-7h6" },
+      { href: "/maintenance", label: "Maintenance", icon: "M14 6l-4 4m0 0l-6 6 2 2 6-6m-2-2l2-2 4 4-2 2" },
     ],
   },
   {
