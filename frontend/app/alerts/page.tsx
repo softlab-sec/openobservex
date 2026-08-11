@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import Shell, { usePoll } from "@/components/Shell";
+import ServiceSelect from "@/components/ServiceSelect";
 import { sevMeta, since } from "@/lib/severity";
 import { RangePicker } from "@/components/ui";
 import {
@@ -223,8 +224,8 @@ function RuleModal({
               </select>
             </div>
             <div>
-              <label className={label}>Service (blank = all)</label>
-              <input className={input} value={form.service ?? ""} onChange={(e) => set("service", e.target.value || null)} placeholder="payment-service" />
+              <label className={label}>Service</label>
+              <ServiceSelect value={form.service ?? null} onChange={(svc) => set("service", svc)} />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
