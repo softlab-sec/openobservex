@@ -90,7 +90,6 @@ export default function ServiceSelect({
                     <span className={`h-1.5 w-1.5 rounded-full ${bad ? "bg-red-400" : "bg-emerald-400"}`} />
                     {s.ServiceName}
                   </span>
-                  <span className="text-xs text-white/35">{s.error_rate}% err</span>
                 </button>
               );
             })}
