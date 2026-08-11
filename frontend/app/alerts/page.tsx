@@ -140,8 +140,8 @@ function FiringAlerts({ minutes, filter, rules }: {
                       <span className="font-medium text-white/90">{a.rule_name}</span>
                       <span className="text-xs text-white/45">{a.service ?? "all services"}</span>
                       {ackd
-                        ? <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] text-amber-300">ack</span>
-                        : <span className="rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] text-rose-300">unack</span>}
+                        ? <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] text-amber-300">Acknowledged</span>
+                        : <span className="rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] text-rose-300">Unacknowledged</span>}
                       <span className="ml-auto text-xs text-white/45">open {since(a.started_at)}</span>
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-xs">

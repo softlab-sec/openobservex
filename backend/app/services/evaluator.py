@@ -95,6 +95,72 @@ def _evaluate_rule(rule: AlertRule) -> tuple[bool, float, str]:
 
 
 
+# Human-readable label + unit per alert kind, for professional notifications.
+_KIND_LABEL = {
+    "error_rate": "Error rate",
+    "latency": "Latency",
+    "throughput": "Throughput",
+    "service_down": "Availability",
+    "cpu": "CPU",
+    "memory": "Memory",
+    "disk": "Disk",
+    "network": "Network",
+}
+_KIND_UNIT = {
+    "error_rate": "%",
+    "latency": "ms",
+    "throughput": " req/s",
+    "cpu": "%",
+    "memory": "%",
+    "disk": "%",
+}
+_SEV_LABEL = {"critical": "Critical", "high": "High", "warning": "Warning", "info": "Info"}
+
+
+def _fmt_val(rule: "AlertRule", value: float) -> str:
+    unit = _KIND_UNIT.get(rule.kind, "")
+    v = round(value, 2)
+    v = int(v) if v == int(v) else v
+    return f"{v}{unit}"
+
+
+def _format_alert(rule: "AlertRule", value: float, status: str) -> tuple[str, str]:
+    """Build a professional plain-text (subject, body) for a firing or
+    resolved alert. status is 'firing' or 'resolved'."""
+    sev = _SEV_LABEL.get((rule.severity or "warning").lower(), "Warning")
+    label = _KIND_LABEL.get(rule.kind, rule.kind)
+    service = rule.service or "All services"
+    observed = _fmt_val(rule, value)
+    threshold = _fmt_val(rule, rule.threshold)
+    when = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+    if status == "firing":
+        subject = f"[{sev.upper()}] {service}: {rule.name}"
+        body = (
+            "ALERT FIRING\n\n"
+            f"Severity:    {sev}\n"
+            f"Service:     {service}\n"
+            f"Alert:       {rule.name}\n\n"
+            f"Condition:   {label} is above threshold\n"
+            f"Observed:    {observed}\n"
+            f"Threshold:   {threshold}\n"
+            f"Window:      {rule.for_minutes} minute(s)\n\n"
+            f"Triggered:   {when}\n"
+        )
+    else:
+        subject = f"[RESOLVED] {service}: {rule.name}"
+        body = (
+            "ALERT RESOLVED\n\n"
+            f"Severity:    {sev}\n"
+            f"Service:     {service}\n"
+            f"Alert:       {rule.name}\n\n"
+            "The condition has recovered.\n"
+            f"Current value: {observed} (threshold {threshold})\n\n"
+            f"Resolved:    {when}\n"
+        )
+    return subject, body
+
+
 def _notify_channels(db, rule: AlertRule, subject: str, body: str) -> None:
     """Send to each NotificationChannel this rule selected. Never raises."""
     if not rule.channel_ids:
@@ -180,7 +246,8 @@ def _fire(db, rule: AlertRule, value: float, summary: str) -> None:
     }
     if rule.webhook_urls:
         notifications.notify_all(rule.webhook_urls.split(","), text, payload)
-    _notify_channels(db, rule, f"FIRING: {rule.name}", f"{summary}" + (f"\nService: {rule.service}" if rule.service else ""))
+    fire_subject, fire_body = _format_alert(rule, value, "firing")
+    _notify_channels(db, rule, fire_subject, fire_body)
     logger.info("incident FIRING: %s (%s)", rule.name, summary)
 
 
@@ -207,7 +274,8 @@ def _resolve(db, rule: AlertRule, value: float) -> None:
     }
     if rule.webhook_urls:
         notifications.notify_all(rule.webhook_urls.split(","), text, payload)
-    _notify_channels(db, rule, f"RESOLVED: {rule.name}", f"Recovered (now {value}).")
+    res_subject, res_body = _format_alert(rule, value, "resolved")
+    _notify_channels(db, rule, res_subject, res_body)
     logger.info("incident RESOLVED: %s", rule.name)
 
 
