@@ -20,9 +20,13 @@ router = APIRouter(prefix="/api/v1/alerts", tags=["alerts"])
 KINDS = {"error_rate", "latency", "log_spike", "service_down"}
 
 
+_OPERATORS = {">", "<", ">=", "<=", "=", "!="}
+
+
 class RuleIn(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     kind: str
+    operator: str = ">"
     service: str | None = None
     threshold: float
     percentile: int = 95
@@ -39,6 +43,7 @@ class RuleOut(BaseModel):
     name: str
     kind: str
     service: str | None
+    operator: str
     threshold: float
     percentile: int
     for_minutes: int
@@ -102,10 +107,13 @@ def create_rule(
 ):
     if body.kind not in KINDS:
         raise HTTPException(status_code=400, detail=f"kind must be one of {sorted(KINDS)}")
+    if body.operator not in _OPERATORS:
+        raise HTTPException(status_code=400, detail=f"operator must be one of {sorted(_OPERATORS)}")
     rule = AlertRule(
         organization_id=user.organization_id,
         name=body.name,
         kind=body.kind,
+        operator=body.operator,
         service=body.service or None,
         threshold=body.threshold,
         percentile=body.percentile,
@@ -134,6 +142,8 @@ def update_rule(
         raise HTTPException(status_code=404, detail="Rule not found")
     if body.kind not in KINDS:
         raise HTTPException(status_code=400, detail=f"kind must be one of {sorted(KINDS)}")
+    if body.operator not in _OPERATORS:
+        raise HTTPException(status_code=400, detail=f"operator must be one of {sorted(_OPERATORS)}")
     for field, value in body.model_dump().items():
         setattr(rule, field, value or None if field in ("service", "webhook_urls") else value)
     db.commit()

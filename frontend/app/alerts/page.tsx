@@ -28,6 +28,15 @@ const KIND_UNIT: Record<string, string> = {
 // Alert types the evaluator actually supports today, with operator-facing
 // descriptions. Only these four are exposed so no alert is created that
 // silently never fires.
+const OPERATORS: Array<{ value: AlertRuleInput["operator"]; label: string; phrase: string }> = [
+  { value: ">", label: ">", phrase: "is above" },
+  { value: ">=", label: ">=", phrase: "is at or above" },
+  { value: "<", label: "<", phrase: "is below" },
+  { value: "<=", label: "<=", phrase: "is at or below" },
+  { value: "=", label: "=", phrase: "equals" },
+  { value: "!=", label: "!=", phrase: "is not" },
+];
+
 const KIND_META: Array<{ value: string; label: string; desc: string }> = [
   { value: "error_rate", label: "Error Rate", desc: "Fires when the share of errored requests exceeds the threshold." },
   { value: "latency", label: "Latency", desc: "Fires when the latency percentile exceeds the threshold (ms)." },
@@ -36,7 +45,7 @@ const KIND_META: Array<{ value: string; label: string; desc: string }> = [
 ];
 
 const EMPTY: AlertRuleInput = {
-  name: "", kind: "error_rate", service: null, threshold: 5, percentile: 95,
+  name: "", kind: "error_rate", operator: ">", service: null, threshold: 5, percentile: 95,
   for_minutes: 5, min_samples: 20, enabled: true, severity: "warning",
   webhook_urls: null, channel_ids: null,
 };
@@ -188,10 +197,47 @@ function FiringAlerts({ minutes, filter, rules }: {
   );
 }
 
+function raw_ok(raw: string, n: number): boolean {
+  return raw.trim() !== "" && Number.isFinite(n) && n >= 1;
+}
+
+function describeRule(form: AlertRuleInput): string {
+  const mins = Math.max(1, form.for_minutes || 1);
+  const dur = `for ${mins} consecutive minute${mins === 1 ? "" : "s"}`;
+  const scope = form.service ? `on ${form.service}` : "across all services";
+
+  if (form.kind === "service_down") {
+    return `Trigger when ${form.service || "any service"} stops reporting traffic ${dur}.`;
+  }
+
+  // operator to a plain verb
+  const op = form.operator;
+  const above = op === ">" || op === ">=";
+  const below = op === "<" || op === "<=";
+  const exceeds = above ? "exceeds" : below ? "drops below" : op === "=" ? "equals" : "is not";
+
+  let metric: string;
+  switch (form.kind) {
+    case "error_rate":
+      metric = `the error rate ${exceeds} ${form.threshold}%`;
+      break;
+    case "latency":
+      metric = `p${form.percentile} latency ${exceeds} ${form.threshold} ms`;
+      break;
+    case "log_spike":
+      metric = `log volume ${exceeds} ${form.threshold} logs per minute`;
+      break;
+    default:
+      metric = `${form.kind} ${exceeds} ${form.threshold}`;
+  }
+  return `Trigger when ${metric} ${dur} ${scope}.`;
+}
+
 function RuleModal({
   initial, onClose, onSaved,
 }: { initial: AlertRule | null; onClose: () => void; onSaved: () => void }) {
   const [form, setForm] = useState<AlertRuleInput>(initial ? { ...initial } : { ...EMPTY });
+  const [forMinStr, setForMinStr] = useState<string>(String((initial ?? EMPTY).for_minutes));
   const [channels, setChannels] = useState<NotificationChannel[]>([]);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -245,13 +291,57 @@ function RuleModal({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={label}>Threshold ({KIND_UNIT[form.kind]})</label>
-              <input type="number" className={input} value={form.threshold} onChange={(e) => set("threshold", Number(e.target.value))} />
+              <label className={label}>Condition</label>
+              <div className="flex gap-2">
+                <select
+                  className={input + " w-24 shrink-0"}
+                  value={form.operator}
+                  onChange={(e) => set("operator", e.target.value as AlertRuleInput["operator"])}
+                >
+                  {OPERATORS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+                <div className="flex flex-1 items-center gap-2">
+                  <input
+                    type="number"
+                    className={input + " flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"}
+                    value={form.threshold}
+                    onChange={(e) => set("threshold", Number(e.target.value))}
+                  />
+                  {KIND_UNIT[form.kind] && (
+                    <span className="shrink-0 text-sm text-white/40">{KIND_UNIT[form.kind]}</span>
+                  )}
+                </div>
+              </div>
             </div>
             <div>
-              <label className={label}>Sustained for (min)</label>
-              <input type="number" className={input} value={form.for_minutes} onChange={(e) => set("for_minutes", Number(e.target.value))} />
+              <label className={label}>Sustained For (Minutes)</label>
+              <input
+                type="number"
+                min={1}
+                step={1}
+                inputMode="numeric"
+                className={input}
+                value={forMinStr}
+                onChange={(e) => {
+                  // allow free typing, including a transient empty field
+                  const raw = e.target.value;
+                  setForMinStr(raw);
+                  const n = Math.floor(Number(raw));
+                  if (raw !== "" && Number.isFinite(n) && n >= 1) set("for_minutes", n);
+                }}
+                onBlur={() => {
+                  // validate only on blur: empty or < 1 falls back to a sane default
+                  const n = Math.floor(Number(forMinStr));
+                  const val = raw_ok(forMinStr, n) ? n : 5;
+                  set("for_minutes", val);
+                  setForMinStr(String(val));
+                }}
+              />
             </div>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+            <div className="mb-0.5 text-[10px] uppercase tracking-wider text-white/35">Rule summary</div>
+            <p className="text-xs leading-relaxed text-white/70">{describeRule(form)}</p>
           </div>
           <div>
             <label className={label}>Severity</label>

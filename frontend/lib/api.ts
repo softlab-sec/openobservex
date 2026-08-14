@@ -386,6 +386,7 @@ export type AlertRule = {
   name: string;
   kind: "error_rate" | "latency" | "log_spike" | "service_down";
   service: string | null;
+  operator: ">" | "<" | ">=" | "<=" | "=" | "!=";
   threshold: number;
   percentile: number;
   for_minutes: number;

@@ -22,6 +22,21 @@ logger = logging.getLogger(__name__)
 EVAL_INTERVAL = 60  # seconds
 
 
+def _compare(value: float, operator: str, threshold: float) -> bool:
+    """Apply the rule's comparison operator. Defaults to > for safety."""
+    if operator == "<":
+        return value < threshold
+    if operator == ">=":
+        return value >= threshold
+    if operator == "<=":
+        return value <= threshold
+    if operator == "=":
+        return value == threshold
+    if operator == "!=":
+        return value != threshold
+    return value > threshold  # ">" and any unknown operator
+
+
 def _evaluate_rule(rule: AlertRule) -> tuple[bool, float, str]:
     """Return (breaching, observed_value, human summary) for one rule."""
     mins = rule.for_minutes
@@ -45,7 +60,7 @@ def _evaluate_rule(rule: AlertRule) -> tuple[bool, float, str]:
         total, _errors, pct = (rows[0] if rows else (0, 0, 0.0))
         if total < rule.min_samples:
             return (False, float(pct or 0), f"only {total} samples (<{rule.min_samples})")
-        breaching = (pct or 0) > rule.threshold
+        breaching = _compare(float(pct or 0), rule.operator, rule.threshold)
         return (breaching, float(pct or 0),
                 f"error rate {pct}% over {mins}m (threshold {rule.threshold}%)")
 
@@ -62,7 +77,7 @@ def _evaluate_rule(rule: AlertRule) -> tuple[bool, float, str]:
         total, p = (rows[0] if rows else (0, 0.0))
         if total < rule.min_samples:
             return (False, float(p or 0), f"only {total} samples (<{rule.min_samples})")
-        breaching = (p or 0) > rule.threshold
+        breaching = _compare(float(p or 0), rule.operator, rule.threshold)
         return (breaching, float(p or 0),
                 f"p{rule.percentile} latency {p}ms over {mins}m (threshold {rule.threshold}ms)")
 
@@ -75,7 +90,7 @@ def _evaluate_rule(rule: AlertRule) -> tuple[bool, float, str]:
         """
         rows = ch_query(q, params).result_rows
         errors = (rows[0][0] if rows else 0)
-        breaching = (errors or 0) > rule.threshold
+        breaching = _compare(float(errors or 0), rule.operator, rule.threshold)
         return (breaching, float(errors or 0),
                 f"{errors} error logs over {mins}m (threshold {int(rule.threshold)})")
 

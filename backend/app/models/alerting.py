@@ -19,6 +19,8 @@ class AlertRule(Base):
     kind: Mapped[str] = mapped_column(String(32), index=True)
     # optional scope: a single service, or NULL for all
     service: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # comparison operator: > | < | >= | <= | = | != (default > for existing rules)
+    operator: Mapped[str] = mapped_column(String(4), default=">", server_default=">")
     # comparison threshold (percent, ms, count, depending on kind)
     threshold: Mapped[float] = mapped_column(Float)
     # for latency: which percentile (95 or 99)
