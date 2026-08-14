@@ -37,6 +37,27 @@ const OPERATORS: Array<{ value: AlertRuleInput["operator"]; label: string; phras
   { value: "!=", label: "!=", phrase: "is not" },
 ];
 
+
+// Per-type field spec: what each alert type exposes. Kept honest to the
+// backend evaluator — service_down has no threshold/operator (it is a binary
+// "spans == 0" check), latency exposes only p95/p99 (the evaluator supports
+// no other percentile).
+const KIND_FIELDS: Record<string, {
+  hasOperator: boolean;
+  hasThreshold: boolean;
+  hasPercentile: boolean;
+  unitLabel: string;
+  thresholdLabel: string;
+  note?: string;
+}> = {
+  error_rate: { hasOperator: true, hasThreshold: true, hasPercentile: false, unitLabel: "%", thresholdLabel: "Error Rate Threshold (%)" },
+  latency: { hasOperator: true, hasThreshold: true, hasPercentile: true, unitLabel: "ms", thresholdLabel: "Latency Threshold (ms)" },
+  log_spike: { hasOperator: true, hasThreshold: true, hasPercentile: false, unitLabel: "logs/min", thresholdLabel: "Log Volume Threshold (logs/min)" },
+  service_down: { hasOperator: false, hasThreshold: false, hasPercentile: false, unitLabel: "", thresholdLabel: "", note: "Fires when the selected service stops producing traffic for the sustained duration. No threshold needed — this is a presence check." },
+};
+
+const PERCENTILES = [95, 99] as const;
+
 const KIND_META: Array<{ value: string; label: string; desc: string }> = [
   { value: "error_rate", label: "Error Rate", desc: "Fires when the share of errored requests exceeds the threshold." },
   { value: "latency", label: "Latency", desc: "Fires when the latency percentile exceeds the threshold (ms)." },
@@ -271,8 +292,8 @@ function RuleModal({
 
         <div className="space-y-3">
           <div>
-            <label className={label}>Name</label>
-            <input className={input} value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="High error rate" />
+            <label className={label}>Rule Name</label>
+            <input className={input} value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. API Gateway Error Rate > 5%" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -289,56 +310,81 @@ function RuleModal({
               <ServiceSelect value={form.service ?? null} onChange={(svc) => set("service", svc)} />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={label}>Condition</label>
-              <div className="flex gap-2">
-                <select
-                  className={input + " w-24 shrink-0"}
-                  value={form.operator}
-                  onChange={(e) => set("operator", e.target.value as AlertRuleInput["operator"])}
-                >
-                  {OPERATORS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-                <div className="flex flex-1 items-center gap-2">
+          {(() => {
+            const spec = KIND_FIELDS[form.kind];
+            if (spec.note) {
+              return (
+                <div className="rounded-lg border border-sky-500/20 bg-sky-500/[0.06] px-3 py-2.5 text-xs leading-relaxed text-sky-200/80">
+                  {spec.note}
+                </div>
+              );
+            }
+            return (
+              <div className="grid grid-cols-2 gap-3">
+                {spec.hasPercentile && (
+                  <div>
+                    <label className={label}>Latency Metric</label>
+                    <select
+                      className={input}
+                      value={form.percentile}
+                      onChange={(e) => set("percentile", Number(e.target.value))}
+                    >
+                      {PERCENTILES.map((pc) => <option key={pc} value={pc}>p{pc}</option>)}
+                    </select>
+                  </div>
+                )}
+                {spec.hasOperator && (
+                  <div>
+                    <label className={label}>Operator</label>
+                    <select
+                      className={input}
+                      value={form.operator}
+                      onChange={(e) => set("operator", e.target.value as AlertRuleInput["operator"])}
+                    >
+                      {OPERATORS.map((o) => <option key={o.value} value={o.value}>{o.label} ({o.phrase})</option>)}
+                    </select>
+                  </div>
+                )}
+                <div>
+                  <label className={label}>{spec.thresholdLabel}</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      className={input + " flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"}
+                      value={form.threshold}
+                      onChange={(e) => set("threshold", Number(e.target.value))}
+                    />
+                    {spec.unitLabel && (
+                      <span className="shrink-0 text-sm text-white/40">{spec.unitLabel}</span>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <label className={label}>Sustained For (Minutes)</label>
                   <input
                     type="number"
-                    className={input + " flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"}
-                    value={form.threshold}
-                    onChange={(e) => set("threshold", Number(e.target.value))}
+                    min={1}
+                    step={1}
+                    inputMode="numeric"
+                    className={input}
+                    value={forMinStr}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      setForMinStr(raw);
+                      const n = Math.floor(Number(raw));
+                      if (raw !== "" && Number.isFinite(n) && n >= 1) set("for_minutes", n);
+                    }}
+                    onBlur={() => {
+                      const n = Math.floor(Number(forMinStr));
+                      const val = raw_ok(forMinStr, n) ? n : 5;
+                      set("for_minutes", val);
+                      setForMinStr(String(val));
+                    }}
                   />
-                  {KIND_UNIT[form.kind] && (
-                    <span className="shrink-0 text-sm text-white/40">{KIND_UNIT[form.kind]}</span>
-                  )}
                 </div>
               </div>
-            </div>
-            <div>
-              <label className={label}>Sustained For (Minutes)</label>
-              <input
-                type="number"
-                min={1}
-                step={1}
-                inputMode="numeric"
-                className={input}
-                value={forMinStr}
-                onChange={(e) => {
-                  // allow free typing, including a transient empty field
-                  const raw = e.target.value;
-                  setForMinStr(raw);
-                  const n = Math.floor(Number(raw));
-                  if (raw !== "" && Number.isFinite(n) && n >= 1) set("for_minutes", n);
-                }}
-                onBlur={() => {
-                  // validate only on blur: empty or < 1 falls back to a sane default
-                  const n = Math.floor(Number(forMinStr));
-                  const val = raw_ok(forMinStr, n) ? n : 5;
-                  set("for_minutes", val);
-                  setForMinStr(String(val));
-                }}
-              />
-            </div>
-          </div>
+            );
+          })()}
           <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
             <div className="mb-0.5 text-[10px] uppercase tracking-wider text-white/35">Rule summary</div>
             <p className="text-xs leading-relaxed text-white/70">{describeRule(form)}</p>
