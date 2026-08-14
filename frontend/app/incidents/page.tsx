@@ -20,7 +20,7 @@ export default function IncidentsPage() {
   const [items, setItems] = useState<IncidentRow[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("active");
-  const [sev, setSev] = useState<"all" | "critical" | "warning" | "info">("all");
+  const [sev, setSev] = useState<"all" | "critical" | "high" | "warning" | "info">("all");
   const [minutes, setMinutes] = useState(60);
 
   const withinWindow = (i: IncidentRow) => {
@@ -41,9 +41,12 @@ export default function IncidentsPage() {
   const firing = windowed.filter((i) => i.status === "firing");
   const counts = {
     critical: firing.filter((i) => i.severity === "critical").length,
+    high: firing.filter((i) => i.severity === "high").length,
     warning: firing.filter((i) => i.severity === "warning").length,
     info: firing.filter((i) => i.severity === "info").length,
-    unack: firing.filter((i) => !i.acknowledged_at).length,
+    open: firing.filter((i) => !i.acknowledged_at).length,
+    acknowledged: firing.filter((i) => i.acknowledged_at).length,
+    resolved: windowed.filter((i) => i.status === "resolved").length,
   };
 
   const shown = useMemo(() => {
@@ -69,11 +72,18 @@ export default function IncidentsPage() {
         <RangePicker value={minutes} onChange={setMinutes} />
       </div>
 
-      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-white/35">By severity</div>
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <SummaryTile label="Critical" value={counts.critical} tone="critical" onClick={() => { setFilter("active"); setSev("critical"); }} />
+        <SummaryTile label="High" value={counts.high} tone="high" onClick={() => { setFilter("active"); setSev("high"); }} />
         <SummaryTile label="Warning" value={counts.warning} tone="warning" onClick={() => { setFilter("active"); setSev("warning"); }} />
         <SummaryTile label="Info" value={counts.info} tone="info" onClick={() => { setFilter("active"); setSev("info"); }} />
-        <SummaryTile label="Unacknowledged" value={counts.unack} tone="neutral" onClick={() => { setFilter("active"); setSev("all"); }} />
+      </div>
+      <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-white/35">By status</div>
+      <div className="mb-5 grid grid-cols-3 gap-3">
+        <SummaryTile label="Open" value={counts.open} tone="neutral" onClick={() => { setFilter("active"); setSev("all"); }} />
+        <SummaryTile label="Acknowledged" value={counts.acknowledged} tone="ack" onClick={() => { setFilter("active"); setSev("all"); }} />
+        <SummaryTile label="Resolved" value={counts.resolved} tone="resolved" onClick={() => { setFilter("resolved"); setSev("all"); }} />
       </div>
 
       {err && <p className="mb-4 rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-300">{err}</p>}
@@ -88,7 +98,7 @@ export default function IncidentsPage() {
           ))}
         </div>
         <div className="flex rounded-lg border border-white/10 p-0.5 text-xs">
-          {(["all", "critical", "warning", "info"] as const).map((s) => (
+          {(["all", "critical", "high", "warning", "info"] as const).map((s) => (
             <button key={s} onClick={() => setSev(s)}
               className={`rounded-md px-3 py-1 capitalize transition ${sev === s ? "bg-white/10 text-white" : "text-white/50 hover:text-white"}`}>
               {s}
@@ -153,12 +163,15 @@ export default function IncidentsPage() {
 }
 
 function SummaryTile({ label, value, tone, onClick }: {
-  label: string; value: number; tone: "critical" | "warning" | "info" | "neutral"; onClick: () => void;
+  label: string; value: number; tone: "critical" | "high" | "warning" | "info" | "ack" | "resolved" | "neutral"; onClick: () => void;
 }) {
   const toneCls =
     tone === "critical" ? "border-rose-500/30 text-rose-300"
+    : tone === "high" ? "border-orange-500/30 text-orange-300"
     : tone === "warning" ? "border-amber-400/30 text-amber-300"
     : tone === "info" ? "border-sky-400/30 text-sky-300"
+    : tone === "ack" ? "border-violet-400/30 text-violet-300"
+    : tone === "resolved" ? "border-emerald-400/30 text-emerald-300"
     : "border-white/15 text-white/70";
   return (
     <button onClick={onClick}

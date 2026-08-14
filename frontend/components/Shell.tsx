@@ -79,7 +79,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
       <aside
         className={`${
           collapsed ? "w-16" : "w-56"
-        } shrink-0 border-r border-white/10 p-3 transition-all duration-200`}
+        } sticky top-0 flex h-screen shrink-0 flex-col overflow-y-auto border-r border-white/10 p-3 transition-all duration-200`}
       >
         <div className="mb-6 flex items-center justify-between px-1">
           {!collapsed && (
@@ -111,7 +111,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               )}
               <div className="space-y-1">
                 {group.items.map((n) => {
-                  const active = pathname === n.href;
+                  const active = n.href === "/" ? pathname === "/" : (pathname === n.href || pathname.startsWith(n.href + "/"));
                   return (
                     <Link
                       key={n.href}

@@ -326,7 +326,7 @@ def _incident_analysis(inc, inc_metric, services, triggers, error_patterns):
         failed = sum(int(tg.get("occurrences", 0)) for tg in triggers)
 
     sev = inc.severity
-    user_impact = "High" if sev == "critical" else "Medium" if sev == "warning" else "Low"
+    user_impact = "High" if sev in ("critical", "high") else "Medium" if sev == "warning" else "Low"
 
     likely_cause = "Undetermined"
     top = triggers[0] if triggers else None

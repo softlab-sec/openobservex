@@ -50,11 +50,12 @@ function fmtDur(sec: number | null | undefined): string {
 
 function KpiCell({ label, value, tone, active, onClick, href }: {
   label: string; value: number | string;
-  tone: "critical" | "warning" | "info" | "ack" | "resolved" | "neutral";
+  tone: "critical" | "high" | "warning" | "info" | "ack" | "resolved" | "neutral";
   active?: boolean; onClick?: () => void; href?: string;
 }) {
   const toneCls =
-    tone === "critical" ? "text-rose-300" : tone === "warning" ? "text-amber-300"
+    tone === "critical" ? "text-rose-300" : tone === "high" ? "text-orange-300"
+    : tone === "warning" ? "text-amber-300"
     : tone === "info" ? "text-sky-300" : tone === "ack" ? "text-violet-300"
     : tone === "resolved" ? "text-emerald-300" : "text-white/85";
   const inner = (
@@ -84,7 +85,7 @@ function notifyText(r: AlertRule): string {
 
 function FiringAlerts({ minutes, filter, rules }: {
   minutes: number;
-  filter: "all" | "info" | "warning" | "critical" | "ack";
+  filter: "all" | "info" | "warning" | "high" | "critical" | "ack";
   rules: AlertRule[];
 }) {
   const [alerts, setAlerts] = useState<IncidentRow[]>([]);
@@ -110,9 +111,10 @@ function FiringAlerts({ minutes, filter, rules }: {
     });
 
   const ruleFor = (a: IncidentRow) => rules.find((r) => r.id === a.rule_id);
-  const lanes: Array<"critical" | "warning" | "info"> = ["critical", "warning", "info"];
+  const lanes: Array<"critical" | "high" | "warning" | "info"> = ["critical", "high", "warning", "info"];
   const laneMeta: Record<string, { label: string; text: string; rule: string }> = {
     critical: { label: "Critical", text: "text-rose-300", rule: "bg-rose-500/40" },
+    high: { label: "High", text: "text-orange-300", rule: "bg-orange-500/40" },
     warning: { label: "Warning", text: "text-amber-300", rule: "bg-amber-400/40" },
     info: { label: "Info", text: "text-sky-300", rule: "bg-sky-400/40" },
   };
@@ -254,11 +256,12 @@ function RuleModal({
           <div>
             <label className={label}>Severity</label>
             <div className="flex gap-2">
-              {(["critical", "warning", "info"] as const).map((sv) => (
+              {(["critical", "high", "warning", "info"] as const).map((sv) => (
                 <button type="button" key={sv} onClick={() => set("severity", sv)}
                   className={`flex-1 rounded-lg border px-3 py-1.5 text-xs capitalize transition ${
                     form.severity === sv
                       ? sv === "critical" ? "border-rose-500/50 bg-rose-500/15 text-rose-200"
+                        : sv === "high" ? "border-orange-500/50 bg-orange-500/15 text-orange-200"
                         : sv === "warning" ? "border-amber-400/50 bg-amber-400/15 text-amber-200"
                         : "border-sky-400/50 bg-sky-400/15 text-sky-200"
                       : "border-white/10 text-white/50 hover:text-white"
@@ -314,7 +317,7 @@ export default function AlertsPage() {
   const [incidents, setIncidents] = useState<IncidentRow[]>([]);
   const [minutes, setMinutes] = useState(60);
   const [metrics, setMetrics] = useState<{ mtta_seconds: number | null; mttr_seconds: number | null } | null>(null);
-  const [alertFilter, setAlertFilter] = useState<"all" | "info" | "warning" | "critical" | "ack">("all");
+  const [alertFilter, setAlertFilter] = useState<"all" | "info" | "warning" | "high" | "critical" | "ack">("all");
   const [err, setErr] = useState<string | null>(null);
   const [modal, setModal] = useState<{ open: boolean; rule: AlertRule | null }>({ open: false, rule: null });
 
@@ -356,6 +359,7 @@ export default function AlertsPage() {
     info: firingInc.filter((i) => i.severity === "info").length,
     warning: firingInc.filter((i) => i.severity === "warning").length,
     critical: firingInc.filter((i) => i.severity === "critical").length,
+    high: firingInc.filter((i) => i.severity === "high").length,
     acknowledged: firingInc.filter((i) => i.acknowledged_at).length,
     resolved: winInc.filter((i) => i.status === "resolved").length,
   };
@@ -379,15 +383,14 @@ export default function AlertsPage() {
           </div>
           <RangePicker value={minutes} onChange={setMinutes} />
         </div>
-        <div className="grid grid-cols-2 gap-px bg-white/5 sm:grid-cols-4 lg:grid-cols-8">
+        <div className="grid grid-cols-4 gap-px bg-white/5 sm:grid-cols-7">
           <KpiCell label="Critical" value={sum.critical} tone="critical" active={alertFilter === "critical"} onClick={() => setAlertFilter(alertFilter === "critical" ? "all" : "critical")} />
+          <KpiCell label="High" value={sum.high} tone="high" active={alertFilter === "high"} onClick={() => setAlertFilter(alertFilter === "high" ? "all" : "high")} />
           <KpiCell label="Warning" value={sum.warning} tone="warning" active={alertFilter === "warning"} onClick={() => setAlertFilter(alertFilter === "warning" ? "all" : "warning")} />
           <KpiCell label="Info" value={sum.info} tone="info" active={alertFilter === "info"} onClick={() => setAlertFilter(alertFilter === "info" ? "all" : "info")} />
-          <KpiCell label="Open" value={sum.total - sum.resolved} tone="neutral" />
+          <KpiCell label="Open" value={firingInc.length} tone="neutral" active={alertFilter === "all"} onClick={() => setAlertFilter("all")} />
           <KpiCell label="Acknowledged" value={sum.acknowledged} tone="ack" active={alertFilter === "ack"} onClick={() => setAlertFilter(alertFilter === "ack" ? "all" : "ack")} />
-          <KpiCell label="Resolved" value={sum.resolved} tone="resolved" href="/incidents" />
-          <KpiCell label="MTTA (7d)" value={fmtDur(metrics?.mtta_seconds)} tone="neutral" />
-          <KpiCell label="MTTR (7d)" value={fmtDur(metrics?.mttr_seconds)} tone="neutral" />
+          <KpiCell label="Resolved" value={sum.resolved} tone="resolved" />
         </div>
       </div>
 
@@ -482,7 +485,7 @@ export default function AlertsPage() {
 
 function AlertStat({ label, value, tone, active, onClick, href }: {
   label: string; value: number;
-  tone: "critical" | "warning" | "info" | "ack" | "resolved" | "neutral";
+  tone: "critical" | "high" | "warning" | "info" | "ack" | "resolved" | "neutral";
   active?: boolean; onClick?: () => void; href?: string;
 }) {
   const toneCls =

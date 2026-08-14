@@ -1,11 +1,12 @@
-export type Severity = "critical" | "warning" | "info";
+export type Severity = "critical" | "high" | "warning" | "info";
 
 type SevMeta = { label: string; dot: string; text: string; bg: string; border: string; bar: string };
 
-export const SEVERITY_RANK: Record<Severity, number> = { critical: 0, warning: 1, info: 2 };
+export const SEVERITY_RANK: Record<Severity, number> = { critical: 0, high: 1, warning: 2, info: 3 };
 
 export const SEVERITY_META: Record<Severity, SevMeta> = {
   critical: { label: "Critical", dot: "bg-rose-500", text: "text-rose-300", bg: "bg-rose-500/10", border: "border-rose-500/40", bar: "bg-rose-500" },
+  high: { label: "High", dot: "bg-orange-500", text: "text-orange-300", bg: "bg-orange-500/10", border: "border-orange-500/40", bar: "bg-orange-500" },
   warning: { label: "Warning", dot: "bg-amber-400", text: "text-amber-300", bg: "bg-amber-400/10", border: "border-amber-400/40", bar: "bg-amber-400" },
   info: { label: "Info", dot: "bg-sky-400", text: "text-sky-300", bg: "bg-sky-400/10", border: "border-sky-400/40", bar: "bg-sky-400" },
 };
