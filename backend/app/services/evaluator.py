@@ -149,29 +149,27 @@ def _format_alert(rule: "AlertRule", value: float, status: str) -> tuple[str, st
     threshold = _fmt_val(rule, rule.threshold)
     when = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
+    on_svc = f" on {rule.service}" if rule.service else ""
     if status == "firing":
-        subject = f"[{sev.upper()}] {service}: {rule.name}"
+        subject = f"[{sev.upper()}] TRIGGERED: {rule.name}{on_svc}"
         body = (
-            "ALERT FIRING\n\n"
+            f"TRIGGERED: {rule.name}\n\n"
             f"Severity:    {sev}\n"
             f"Service:     {service}\n"
-            f"Alert:       {rule.name}\n\n"
-            f"Condition:   {label} is above threshold\n"
             f"Observed:    {observed}\n"
             f"Threshold:   {threshold}\n"
             f"Window:      {rule.for_minutes} minute(s)\n\n"
             f"Triggered:   {when}\n"
         )
     else:
-        subject = f"[RESOLVED] {service}: {rule.name}"
+        subject = f"[{sev.upper()}] RECOVERED: {rule.name}{on_svc}"
         body = (
-            "ALERT RESOLVED\n\n"
-            f"Severity:    {sev}\n"
-            f"Service:     {service}\n"
-            f"Alert:       {rule.name}\n\n"
-            "The condition has recovered.\n"
-            f"Current value: {observed} (threshold {threshold})\n\n"
-            f"Resolved:    {when}\n"
+            f"RECOVERED: {rule.name}\n\n"
+            f"Severity:        {sev}\n"
+            f"Service:         {service}\n"
+            f"Current value:   {observed}\n"
+            f"Recovery below:  {threshold}\n\n"
+            f"Recovered:       {when}\n"
         )
     return subject, body
 
@@ -247,9 +245,7 @@ def _fire(db, rule: AlertRule, value: float, summary: str) -> None:
     db.add(IncidentEvent(incident_id=inc.id, kind="fired", actor=None, detail=summary))
     db.commit()
 
-    text = f":rotating_light: FIRING: {rule.name}\n{summary}"
-    if rule.service:
-        text += f"\nService: {rule.service}"
+    _wh_subject, text = _format_alert(rule, value, "firing")
     payload = {
         "status": "firing",
         "rule": rule.name,
@@ -279,7 +275,7 @@ def _resolve(db, rule: AlertRule, value: float) -> None:
     inc.resolved_at = datetime.now(timezone.utc)
     db.commit()
 
-    text = f":white_check_mark: RESOLVED: {rule.name}\nRecovered (now {value})."
+    _wh_subject, text = _format_alert(rule, value, "resolved")
     payload = {
         "status": "resolved",
         "rule": rule.name,
