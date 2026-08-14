@@ -211,6 +211,83 @@ def _in_maintenance(db, rule: AlertRule) -> bool:
     return win is not None
 
 
+def _enrich_error_rate(rule: AlertRule, mins: int) -> dict | None:
+    """One ClickHouse query for operator context on an error_rate/latency alert.
+
+    Returns total requests, failed requests, affected-endpoint count, and the
+    top failing endpoint over the rule's service and window. Best-effort:
+    returns None on any failure so it can never affect the alert that already
+    fired.
+    """
+    try:
+        svc_clause = "AND ServiceName = {svc:String}" if rule.service else ""
+        params: dict = {"mins": mins}
+        if rule.service:
+            params["svc"] = rule.service
+        # Totals over root spans, matching how error_rate is evaluated.
+        totals = ch_query(
+            f"""
+            SELECT count() AS total,
+                   countIf(StatusCode = 'Error') AS failed,
+                   uniqExactIf(SpanName, StatusCode = 'Error') AS bad_endpoints
+            FROM otel_traces
+            WHERE ParentSpanId = ''
+              AND Timestamp >= now() - INTERVAL {{mins:UInt32}} MINUTE {svc_clause}
+            """,
+            params,
+        ).result_rows
+        total, failed, bad_endpoints = (totals[0] if totals else (0, 0, 0))
+        # Top failing endpoint by error count.
+        top = ch_query(
+            f"""
+            SELECT SpanName AS endpoint,
+                   countIf(StatusCode = 'Error') AS errors,
+                   count() AS reqs
+            FROM otel_traces
+            WHERE ParentSpanId = ''
+              AND Timestamp >= now() - INTERVAL {{mins:UInt32}} MINUTE {svc_clause}
+            GROUP BY SpanName
+            HAVING errors > 0
+            ORDER BY errors DESC
+            LIMIT 1
+            """,
+            params,
+        ).result_rows
+        top_endpoint = None
+        if top:
+            ep, errs, reqs = top[0]
+            rate = round((errs / reqs * 100) if reqs else 0, 1)
+            top_endpoint = {"name": ep, "errors": int(errs), "reqs": int(reqs), "rate": rate}
+        return {
+            "total": int(total or 0),
+            "failed": int(failed or 0),
+            "bad_endpoints": int(bad_endpoints or 0),
+            "top_endpoint": top_endpoint,
+        }
+    except Exception:
+        logger.exception("enrichment query failed for rule %s", rule.name)
+        return None
+
+
+def _enrich_lines(rule: AlertRule, mins: int) -> str:
+    """Best-effort operator context appended to a firing notification.
+    Returns an empty string if enrichment is unavailable, so no invented
+    fields ever appear. Only meaningful for trace-based kinds."""
+    if rule.kind not in ("error_rate", "latency"):
+        return ""
+    ctx = _enrich_error_rate(rule, mins)
+    if not ctx or ctx["total"] == 0:
+        return ""
+    lines = ["", "Impact:"]
+    lines.append(f"  Failed Requests:    {ctx['failed']:,} of {ctx['total']:,}")
+    if ctx["bad_endpoints"]:
+        lines.append(f"  Affected Endpoints: {ctx['bad_endpoints']}")
+    te = ctx.get("top_endpoint")
+    if te:
+        lines.append(f"  Top Endpoint:       {te['name']} ({te['rate']}% errors, {te['errors']:,} of {te['reqs']:,})")
+    return "\n".join(lines) + "\n"
+
+
 def _fire(db, rule: AlertRule, value: float, summary: str) -> None:
     if _in_maintenance(db, rule):
         logger.info(
@@ -246,6 +323,9 @@ def _fire(db, rule: AlertRule, value: float, summary: str) -> None:
     db.commit()
 
     _wh_subject, text = _format_alert(rule, value, "firing")
+    _extra = _enrich_lines(rule, rule.for_minutes)
+    if _extra:
+        text = text + _extra
     payload = {
         "status": "firing",
         "rule": rule.name,
@@ -258,6 +338,8 @@ def _fire(db, rule: AlertRule, value: float, summary: str) -> None:
     if rule.webhook_urls:
         notifications.notify_all(rule.webhook_urls.split(","), text, payload)
     fire_subject, fire_body = _format_alert(rule, value, "firing")
+    if _extra:
+        fire_body = fire_body + _extra
     _notify_channels(db, rule, fire_subject, fire_body)
     logger.info("incident FIRING: %s (%s)", rule.name, summary)
 
