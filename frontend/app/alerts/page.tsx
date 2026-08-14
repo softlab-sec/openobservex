@@ -25,6 +25,16 @@ const KIND_UNIT: Record<string, string> = {
   service_down: "",
 };
 
+// Alert types the evaluator actually supports today, with operator-facing
+// descriptions. Only these four are exposed so no alert is created that
+// silently never fires.
+const KIND_META: Array<{ value: string; label: string; desc: string }> = [
+  { value: "error_rate", label: "Error Rate", desc: "Fires when the share of errored requests exceeds the threshold." },
+  { value: "latency", label: "Latency", desc: "Fires when the latency percentile exceeds the threshold (ms)." },
+  { value: "log_spike", label: "Log Spike", desc: "Fires when log volume per minute exceeds the threshold." },
+  { value: "service_down", label: "Availability", desc: "Fires when the service stops producing traffic." },
+];
+
 const EMPTY: AlertRuleInput = {
   name: "", kind: "error_rate", service: null, threshold: 5, percentile: 95,
   for_minutes: 5, min_samples: 20, enabled: true, severity: "warning",
@@ -218,10 +228,13 @@ function RuleModal({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={label}>Condition</label>
+              <label className={label}>Alert Type</label>
               <select className={input} value={form.kind} onChange={(e) => set("kind", e.target.value as AlertRuleInput["kind"])}>
-                {Object.entries(KIND_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                {KIND_META.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
               </select>
+              <p className="mt-1 text-[11px] leading-snug text-white/40">
+                {KIND_META.find((m) => m.value === form.kind)?.desc}
+              </p>
             </div>
             <div>
               <label className={label}>Service</label>
