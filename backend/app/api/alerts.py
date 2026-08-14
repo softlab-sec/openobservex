@@ -17,7 +17,7 @@ from app.services import evaluator, notifications
 
 router = APIRouter(prefix="/api/v1/alerts", tags=["alerts"])
 
-KINDS = {"error_rate", "latency", "log_spike", "service_down"}
+KINDS = {"error_rate", "latency", "log_spike", "service_down", "cpu", "memory", "disk"}
 
 
 _OPERATORS = {">", "<", ">=", "<=", "=", "!="}

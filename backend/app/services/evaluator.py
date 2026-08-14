@@ -37,6 +37,85 @@ def _compare(value: float, operator: str, threshold: float) -> bool:
     return value > threshold  # ">" and any unknown operator
 
 
+def _infra_cpu_pct(mins: int) -> float | None:
+    """Cluster CPU utilization percent over the window (same calc as infra page)."""
+    rows = ch_query(
+        """
+        WITH deltas AS (
+            SELECT Attributes['mode'] AS mode, max(Value)-min(Value) AS delta
+            FROM otel_metrics_sum
+            WHERE MetricName='node_cpu_seconds_total'
+              AND TimeUnix >= now() - INTERVAL {mins:UInt32} MINUTE
+            GROUP BY mode
+        )
+        SELECT round((1 - sumIf(delta, mode='idle') / greatest(sum(delta),1)) * 100, 1)
+        FROM deltas
+        """,
+        {"mins": mins},
+    ).result_rows
+    return float(rows[0][0]) if rows and rows[0][0] is not None else None
+
+
+def _infra_mem_pct(mins: int) -> float | None:
+    """Memory used percent (same calc as infra page)."""
+    rows = ch_query(
+        """
+        SELECT
+            (SELECT argMax(Value, TimeUnix) FROM otel_metrics_gauge
+             WHERE MetricName='node_memory_MemAvailable_bytes'
+               AND TimeUnix >= now() - INTERVAL {mins:UInt32} MINUTE) AS avail,
+            (SELECT argMax(Value, TimeUnix) FROM otel_metrics_gauge
+             WHERE MetricName='node_memory_MemTotal_bytes'
+               AND TimeUnix >= now() - INTERVAL {mins:UInt32} MINUTE) AS total
+        """,
+        {"mins": mins},
+    ).result_rows
+    if not rows or not rows[0][1]:
+        return None
+    avail, total = rows[0]
+    return round((1 - avail / total) * 100, 1)
+
+
+def _infra_disk_pct(mins: int) -> float | None:
+    """Root filesystem used percent (same calc as infra page)."""
+    rows = ch_query(
+        """
+        SELECT
+            (SELECT argMax(Value, TimeUnix) FROM otel_metrics_gauge
+             WHERE MetricName='node_filesystem_avail_bytes'
+               AND Attributes['mountpoint']='/'
+               AND TimeUnix >= now() - INTERVAL {mins:UInt32} MINUTE) AS avail,
+            (SELECT argMax(Value, TimeUnix) FROM otel_metrics_gauge
+             WHERE MetricName='node_filesystem_size_bytes'
+               AND Attributes['mountpoint']='/'
+               AND TimeUnix >= now() - INTERVAL {mins:UInt32} MINUTE) AS size
+        """,
+        {"mins": mins},
+    ).result_rows
+    if not rows or not rows[0][1]:
+        return None
+    avail, size = rows[0]
+    return round((1 - avail / size) * 100, 1)
+
+
+_INFRA_FN = {"cpu": _infra_cpu_pct, "memory": _infra_mem_pct, "disk": _infra_disk_pct}
+_INFRA_NAME = {"cpu": "CPU", "memory": "Memory", "disk": "Disk"}
+
+
+def _evaluate_infra(rule: AlertRule) -> tuple[bool, float, str]:
+    """Cluster-wide infra alert (cpu/memory/disk). Percentage vs threshold via
+    the rule's operator. Not service-scoped — these are host metrics."""
+    mins = rule.for_minutes
+    fn = _INFRA_FN[rule.kind]
+    pct = fn(mins)
+    name = _INFRA_NAME[rule.kind]
+    if pct is None:
+        return (False, 0.0, f"{name} metric unavailable over {mins}m")
+    breaching = _compare(pct, rule.operator, rule.threshold)
+    return (breaching, pct,
+            f"{name} usage {pct}% over {mins}m (threshold {rule.operator} {rule.threshold}%)")
+
+
 def _evaluate_rule(rule: AlertRule) -> tuple[bool, float, str]:
     """Return (breaching, observed_value, human summary) for one rule."""
     mins = rule.for_minutes
@@ -46,6 +125,8 @@ def _evaluate_rule(rule: AlertRule) -> tuple[bool, float, str]:
     if svc:
         params["svc"] = svc
 
+    if rule.kind in ("cpu", "memory", "disk"):
+        return _evaluate_infra(rule)
     if rule.kind == "error_rate":
         q = f"""
             SELECT

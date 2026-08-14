@@ -23,6 +23,9 @@ const KIND_UNIT: Record<string, string> = {
   latency: "ms",
   log_spike: "/min",
   service_down: "",
+  cpu: "%",
+  memory: "%",
+  disk: "%",
 };
 
 // Alert types the evaluator actually supports today, with operator-facing
@@ -54,6 +57,9 @@ const KIND_FIELDS: Record<string, {
   latency: { hasOperator: true, hasThreshold: true, hasPercentile: true, unitLabel: "ms", thresholdLabel: "Latency Threshold (ms)" },
   log_spike: { hasOperator: true, hasThreshold: true, hasPercentile: false, unitLabel: "logs/min", thresholdLabel: "Log Volume Threshold (logs/min)" },
   service_down: { hasOperator: false, hasThreshold: false, hasPercentile: false, unitLabel: "", thresholdLabel: "", note: "Fires when the selected service stops producing traffic for the sustained duration. No threshold needed — this is a presence check." },
+  cpu: { hasOperator: true, hasThreshold: true, hasPercentile: false, unitLabel: "%", thresholdLabel: "CPU Threshold (%)" },
+  memory: { hasOperator: true, hasThreshold: true, hasPercentile: false, unitLabel: "%", thresholdLabel: "Memory Threshold (%)" },
+  disk: { hasOperator: true, hasThreshold: true, hasPercentile: false, unitLabel: "%", thresholdLabel: "Disk Threshold (%)" },
 };
 
 const PERCENTILES = [95, 99] as const;
@@ -63,6 +69,9 @@ const KIND_META: Array<{ value: string; label: string; desc: string }> = [
   { value: "latency", label: "Latency", desc: "Fires when the latency percentile exceeds the threshold (ms)." },
   { value: "log_spike", label: "Log Spike", desc: "Fires when log volume per minute exceeds the threshold." },
   { value: "service_down", label: "Availability", desc: "Fires when the service stops producing traffic." },
+  { value: "cpu", label: "CPU", desc: "Fires when cluster CPU utilization crosses the threshold." },
+  { value: "memory", label: "Memory", desc: "Fires when cluster memory usage crosses the threshold." },
+  { value: "disk", label: "Disk", desc: "Fires when root filesystem usage crosses the threshold." },
 ];
 
 const EMPTY: AlertRuleInput = {
@@ -307,7 +316,11 @@ function RuleModal({
             </div>
             <div>
               <label className={label}>Service</label>
-              <ServiceSelect value={form.service ?? null} onChange={(svc) => set("service", svc)} />
+              {["cpu", "memory", "disk"].includes(form.kind) ? (
+                <div className={input + " flex items-center text-white/40"}>Cluster-wide (host metric)</div>
+              ) : (
+                <ServiceSelect value={form.service ?? null} onChange={(svc) => set("service", svc)} />
+              )}
             </div>
           </div>
           {(() => {
