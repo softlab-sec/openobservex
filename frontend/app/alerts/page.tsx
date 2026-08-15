@@ -482,13 +482,25 @@ export default function AlertsPage() {
   usePoll(load, [], 15000);
 
   async function toggle(rule: AlertRule) {
-    await apiSend(`/api/v1/alerts/rules/${rule.id}`, "PATCH", { ...rule, enabled: !rule.enabled });
-    load();
+    try {
+      setErr(null);
+      await apiSend(`/api/v1/alerts/rules/${rule.id}`, "PATCH", { ...rule, enabled: !rule.enabled });
+      load();
+    } catch (e) {
+      console.error("Failed to toggle alert rule:", e);
+      setErr(`Could not update "${rule.name}": ${(e as Error).message}. Please try again.`);
+    }
   }
   async function remove(rule: AlertRule) {
     if (!confirm(`Delete rule "${rule.name}"?`)) return;
-    await apiSend(`/api/v1/alerts/rules/${rule.id}`, "DELETE");
-    load();
+    try {
+      setErr(null);
+      await apiSend(`/api/v1/alerts/rules/${rule.id}`, "DELETE");
+      load();
+    } catch (e) {
+      console.error("Failed to delete alert rule:", e);
+      setErr(`Could not delete "${rule.name}": ${(e as Error).message}. Please try again.`);
+    }
   }
 
   const firingCount = rules.filter((r) => r.is_firing).length;

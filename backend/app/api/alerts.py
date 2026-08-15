@@ -160,6 +160,11 @@ def delete_rule(
     rule = db.get(AlertRule, rule_id)
     if not rule or rule.organization_id != user.organization_id:
         raise HTTPException(status_code=404, detail="Rule not found")
+    # Detach incidents first so the FK constraint does not block deletion.
+    # Incidents are historical facts and are preserved (rule_id set to NULL).
+    db.query(Incident).filter(Incident.rule_id == rule_id).update(
+        {Incident.rule_id: None}, synchronize_session=False
+    )
     db.delete(rule)
     db.commit()
 
