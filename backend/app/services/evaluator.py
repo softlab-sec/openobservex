@@ -350,23 +350,69 @@ def _enrich_error_rate(rule: AlertRule, mins: int) -> dict | None:
         return None
 
 
+def _enrich_latency(rule: AlertRule, mins: int) -> dict | None:
+    """One ClickHouse query for latency-alert context: the slowest operations
+    by p95 over the rule's service and window. A latency alert is about
+    slowness, not errors, so this shows where the latency actually is.
+    Best-effort: returns None on any failure."""
+    try:
+        svc_clause = "AND ServiceName = {svc:String}" if rule.service else ""
+        params: dict = {"mins": mins}
+        if rule.service:
+            params["svc"] = rule.service
+        rows = ch_query(
+            f"""
+            SELECT SpanName AS endpoint,
+                   round(quantile(0.95)(Duration) / 1000000, 1) AS p95_ms,
+                   count() AS reqs
+            FROM otel_traces
+            WHERE ParentSpanId = ''
+              AND Timestamp >= now() - INTERVAL {{mins:UInt32}} MINUTE {svc_clause}
+            GROUP BY SpanName
+            HAVING reqs > 0
+            ORDER BY p95_ms DESC
+            LIMIT 3
+            """,
+            params,
+        ).result_rows
+        if not rows:
+            return None
+        slowest = [
+            {"name": r[0], "p95_ms": float(r[1]), "reqs": int(r[2])}
+            for r in rows
+        ]
+        total_reqs = sum(r["reqs"] for r in slowest)
+        return {"slowest": slowest, "total_reqs": total_reqs}
+    except Exception:
+        logger.exception("latency enrichment query failed for rule %s", rule.name)
+        return None
+
+
 def _enrich_lines(rule: AlertRule, mins: int) -> str:
     """Best-effort operator context appended to a firing notification.
     Returns an empty string if enrichment is unavailable, so no invented
     fields ever appear. Only meaningful for trace-based kinds."""
-    if rule.kind not in ("error_rate", "latency"):
-        return ""
-    ctx = _enrich_error_rate(rule, mins)
-    if not ctx or ctx["total"] == 0:
-        return ""
-    lines = ["", "Impact:"]
-    lines.append(f"  Failed Requests:    {ctx['failed']:,} of {ctx['total']:,}")
-    if ctx["bad_endpoints"]:
-        lines.append(f"  Affected Endpoints: {ctx['bad_endpoints']}")
-    te = ctx.get("top_endpoint")
-    if te:
-        lines.append(f"  Top Endpoint:       {te['name']} ({te['rate']}% errors, {te['errors']:,} of {te['reqs']:,})")
-    return "\n".join(lines) + "\n"
+    if rule.kind == "latency":
+        ctx = _enrich_latency(rule, mins)
+        if not ctx or not ctx["slowest"]:
+            return ""
+        lines = ["", "Impact (slowest operations):"]
+        for ep in ctx["slowest"]:
+            lines.append(f"  {ep['name']}: p95 {ep['p95_ms']:,.0f}ms ({ep['reqs']:,} requests)")
+        return "\n".join(lines) + "\n"
+    if rule.kind == "error_rate":
+        ctx = _enrich_error_rate(rule, mins)
+        if not ctx or ctx["total"] == 0:
+            return ""
+        lines = ["", "Impact:"]
+        lines.append(f"  Failed Requests:    {ctx['failed']:,} of {ctx['total']:,}")
+        if ctx["bad_endpoints"]:
+            lines.append(f"  Affected Endpoints: {ctx['bad_endpoints']}")
+        te = ctx.get("top_endpoint")
+        if te:
+            lines.append(f"  Top Endpoint:       {te['name']} ({te['rate']}% errors, {te['errors']:,} of {te['reqs']:,})")
+        return "\n".join(lines) + "\n"
+    return ""
 
 
 def _fire(db, rule: AlertRule, value: float, summary: str) -> None:
