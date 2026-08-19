@@ -19,7 +19,12 @@ cd "$ROOT" || { echo "$(date -u +%FT%TZ) ERROR cannot cd to $ROOT" >> "$LOG"; ex
 
 echo "$(date -u +%FT%TZ) starting nightly backup" >> "$LOG"
 if "$ROOT/infra/scripts/backup-postgres.sh" >> "$LOG" 2>&1; then
-  echo "$(date -u +%FT%TZ) backup OK" >> "$LOG"
+  echo "$(date -u +%FT%TZ) postgres backup OK" >> "$LOG"
 else
-  echo "$(date -u +%FT%TZ) backup FAILED (exit $?)" >> "$LOG"
+  echo "$(date -u +%FT%TZ) postgres backup FAILED (exit $?)" >> "$LOG"
+fi
+if "$ROOT/infra/scripts/backup-clickhouse-schema.sh" >> "$LOG" 2>&1; then
+  echo "$(date -u +%FT%TZ) clickhouse schema backup OK" >> "$LOG"
+else
+  echo "$(date -u +%FT%TZ) clickhouse schema backup FAILED (exit $?)" >> "$LOG"
 fi
