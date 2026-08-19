@@ -30,7 +30,7 @@ export default function MaintenancePage() {
       .then((d) => { setWindows(d); setErr(null); })
       .catch((e: Error) => setErr(e.message));
   }, []);
-  usePoll(load, 15000);
+  usePoll(load, [], 15000);
 
   async function create() {
     if (!reason.trim()) { setErr("Reason is required"); return; }

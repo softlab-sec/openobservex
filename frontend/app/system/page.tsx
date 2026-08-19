@@ -45,7 +45,7 @@ export default function SystemHealthPage() {
       .then((d) => { setH(d); setErr(null); })
       .catch((e: Error) => setErr(e.message));
   }, []);
-  usePoll(load, 10000);
+  usePoll(load, [], 10000);
 
   const st = h ? STATUS_STYLE[h.status] ?? STATUS_STYLE.degraded : null;
   const signals: Array<["traces" | "logs" | "metrics", string]> = [
