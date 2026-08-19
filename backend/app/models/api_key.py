@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, func
+from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.postgres import Base
@@ -18,12 +18,13 @@ class ApiKey(Base):
     """
 
     __tablename__ = "api_keys"
+    __table_args__ = (UniqueConstraint("prefix", name="uq_api_keys_prefix"),)
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     application_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("applications.id"), index=True
     )
-    prefix: Mapped[str] = mapped_column(String(32), unique=True, index=True)
+    prefix: Mapped[str] = mapped_column(String(32), index=True)
     key_hash: Mapped[str] = mapped_column(String(64), index=True)
     name: Mapped[str] = mapped_column(String(255), default="default")
     rate_limit_rps: Mapped[int] = mapped_column(default=50, server_default="50")
