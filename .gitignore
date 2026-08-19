@@ -31,3 +31,4 @@ Thumbs.db
 *.swp
 .env
 infra/backups/
+infra/backups/backup.log
