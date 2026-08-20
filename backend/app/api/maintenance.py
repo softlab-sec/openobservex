@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 from app.api.auth import get_current_user
 from app.db.postgres import get_db
 from app.models import MaintenanceWindow, User
+from app.core.roles import require_role
 
 router = APIRouter(prefix="/api/v1/maintenance", tags=["maintenance"])
 
@@ -62,7 +63,7 @@ def list_windows(user: User = Depends(get_current_user), db: Session = Depends(g
     return [_to_out(w) for w in rows]
 
 
-@router.post("", response_model=WindowOut, status_code=201)
+@router.post("", response_model=WindowOut, status_code=201, dependencies=[Depends(require_role("member"))])
 def create_window(
     body: WindowIn,
     user: User = Depends(get_current_user),
@@ -84,7 +85,7 @@ def create_window(
     return _to_out(w)
 
 
-@router.delete("/{window_id}", status_code=204)
+@router.delete("/{window_id}", status_code=204, dependencies=[Depends(require_role("admin"))])
 def delete_window(
     window_id: uuid.UUID,
     user: User = Depends(get_current_user),

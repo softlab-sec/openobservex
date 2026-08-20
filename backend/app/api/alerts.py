@@ -14,6 +14,7 @@ from app.db.clickhouse import ch_query_scoped
 from app.api.applications import tenant_dependency
 from app.models import AlertRule, Incident, IncidentEvent, User, Anomaly
 from app.services import evaluator, notifications
+from app.core.roles import require_role
 
 router = APIRouter(prefix="/api/v1/alerts", tags=["alerts"])
 
@@ -99,7 +100,7 @@ def list_rules(user: User = Depends(get_current_user), db: Session = Depends(get
     return out
 
 
-@router.post("/rules", response_model=RuleOut, status_code=201)
+@router.post("/rules", response_model=RuleOut, status_code=201, dependencies=[Depends(require_role("member"))])
 def create_rule(
     body: RuleIn,
     user: User = Depends(get_current_user),
@@ -130,7 +131,7 @@ def create_rule(
     return rule
 
 
-@router.patch("/rules/{rule_id}", response_model=RuleOut)
+@router.patch("/rules/{rule_id}", response_model=RuleOut, dependencies=[Depends(require_role("member"))])
 def update_rule(
     rule_id: uuid.UUID,
     body: RuleIn,
@@ -151,7 +152,7 @@ def update_rule(
     return rule
 
 
-@router.delete("/rules/{rule_id}", status_code=204)
+@router.delete("/rules/{rule_id}", status_code=204, dependencies=[Depends(require_role("admin"))])
 def delete_rule(
     rule_id: uuid.UUID,
     user: User = Depends(get_current_user),
@@ -169,7 +170,7 @@ def delete_rule(
     db.commit()
 
 
-@router.post("/rules/{rule_id}/test")
+@router.post("/rules/{rule_id}/test", dependencies=[Depends(require_role("member"))])
 def test_rule_webhook(
     rule_id: uuid.UUID,
     user: User = Depends(get_current_user),
@@ -237,7 +238,7 @@ def list_incidents(
     return db.scalars(q).all()
 
 
-@router.post("/evaluate-now")
+@router.post("/evaluate-now", dependencies=[Depends(require_role("member"))])
 def evaluate_now(user: User = Depends(get_current_user)):
     """Manually trigger one evaluation cycle (useful for testing)."""
     checked = evaluator.evaluate_once()
@@ -285,7 +286,7 @@ def incident_timeline(incident_id: uuid.UUID, user: User = Depends(get_current_u
     ).all()
 
 
-@router.post("/incidents/{incident_id}/acknowledge", response_model=IncidentOut)
+@router.post("/incidents/{incident_id}/acknowledge", response_model=IncidentOut, dependencies=[Depends(require_role("member"))])
 def acknowledge_incident(incident_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     inc = _owned_incident(incident_id, user, db)
     if inc.acknowledged_at is None:
@@ -297,7 +298,7 @@ def acknowledge_incident(incident_id: uuid.UUID, user: User = Depends(get_curren
     return inc
 
 
-@router.post("/incidents/{incident_id}/assign", response_model=IncidentOut)
+@router.post("/incidents/{incident_id}/assign", response_model=IncidentOut, dependencies=[Depends(require_role("member"))])
 def assign_incident(incident_id: uuid.UUID, body: AssignIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     inc = _owned_incident(incident_id, user, db)
     inc.assigned_to = body.assignee
@@ -307,7 +308,7 @@ def assign_incident(incident_id: uuid.UUID, body: AssignIn, user: User = Depends
     return inc
 
 
-@router.post("/incidents/{incident_id}/note", response_model=EventOut)
+@router.post("/incidents/{incident_id}/note", response_model=EventOut, dependencies=[Depends(require_role("member"))])
 def add_note(incident_id: uuid.UUID, body: NoteIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     inc = _owned_incident(incident_id, user, db)
     ev = IncidentEvent(incident_id=inc.id, kind="note", actor=user.email, detail=body.detail)
@@ -317,7 +318,7 @@ def add_note(incident_id: uuid.UUID, body: NoteIn, user: User = Depends(get_curr
     return ev
 
 
-@router.post("/incidents/{incident_id}/resolve", response_model=IncidentOut)
+@router.post("/incidents/{incident_id}/resolve", response_model=IncidentOut, dependencies=[Depends(require_role("member"))])
 def resolve_incident(incident_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     inc = _owned_incident(incident_id, user, db)
     if inc.status != "resolved":
@@ -988,7 +989,7 @@ async def anomaly_evidence(
 SUPPRESS_MINUTES = 10  # after a manual resolve/dismiss, detector won't reopen this (service,metric) for this long
 
 
-@router.post("/anomalies/{anomaly_id}/resolve", response_model=AnomalyOut)
+@router.post("/anomalies/{anomaly_id}/resolve", response_model=AnomalyOut, dependencies=[Depends(require_role("member"))])
 def resolve_anomaly(anomaly_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Manually resolve an anomaly. Applies a suppression cooldown so the
     detector will not immediately reopen it."""
@@ -1008,7 +1009,7 @@ def resolve_anomaly(anomaly_id: uuid.UUID, user: User = Depends(get_current_user
     return a
 
 
-@router.post("/anomalies/{anomaly_id}/dismiss", response_model=AnomalyOut)
+@router.post("/anomalies/{anomaly_id}/dismiss", response_model=AnomalyOut, dependencies=[Depends(require_role("member"))])
 def dismiss_anomaly(anomaly_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Dismiss an anomaly as a false positive. Same mechanics as resolve, but
     labeled 'dismissed' so real resolutions can be told apart from noise."""
@@ -1028,7 +1029,7 @@ def dismiss_anomaly(anomaly_id: uuid.UUID, user: User = Depends(get_current_user
     return a
 
 
-@router.post("/anomalies/{anomaly_id}/escalate", response_model=AnomalyOut)
+@router.post("/anomalies/{anomaly_id}/escalate", response_model=AnomalyOut, dependencies=[Depends(require_role("member"))])
 def escalate_anomaly(anomaly_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Manually promote an active anomaly to an incident now, without waiting
     for the sustained-hits threshold."""

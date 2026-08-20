@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.api.auth import get_current_user
 from app.db.postgres import get_db
 from app.models import Application, User
+from app.core.roles import require_role
 
 router = APIRouter(prefix="/api/v1/applications", tags=["applications"])
 
@@ -55,7 +56,7 @@ def list_applications(
     ).all()
 
 
-@router.post("", response_model=AppOut, status_code=201)
+@router.post("", response_model=AppOut, status_code=201, dependencies=[Depends(require_role("admin"))])
 def create_application(
     body: AppIn,
     user: User = Depends(get_current_user),
@@ -76,7 +77,7 @@ def create_application(
     return app
 
 
-@router.delete("/{app_id}", status_code=204)
+@router.delete("/{app_id}", status_code=204, dependencies=[Depends(require_role("admin"))])
 def delete_application(
     app_id: uuid.UUID,
     user: User = Depends(get_current_user),

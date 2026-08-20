@@ -18,6 +18,7 @@ from app.api.auth import get_current_user
 from app.db.postgres import get_db
 from app.models import NotificationChannel, User
 from app.services.dispatch import dispatch, parse_config
+from app.core.roles import require_role
 
 router = APIRouter(prefix="/api/v1/channels", tags=["channels"])
 
@@ -62,7 +63,7 @@ def list_channels(user: User = Depends(get_current_user), db: Session = Depends(
     return [_to_out(c) for c in rows]
 
 
-@router.post("", response_model=ChannelOut, status_code=201)
+@router.post("", response_model=ChannelOut, status_code=201, dependencies=[Depends(require_role("admin"))])
 def create_channel(body: ChannelIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if body.kind not in ("email", "slack", "discord", "webhook"):
         raise HTTPException(422, "invalid channel kind")
@@ -77,7 +78,7 @@ def create_channel(body: ChannelIn, user: User = Depends(get_current_user), db: 
     return _to_out(ch)
 
 
-@router.patch("/{channel_id}", response_model=ChannelOut)
+@router.patch("/{channel_id}", response_model=ChannelOut, dependencies=[Depends(require_role("admin"))])
 def update_channel(channel_id: uuid.UUID, body: ChannelIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     ch = db.get(NotificationChannel, channel_id)
     if not ch or ch.organization_id != user.organization_id:
@@ -94,7 +95,7 @@ def update_channel(channel_id: uuid.UUID, body: ChannelIn, user: User = Depends(
     return _to_out(ch)
 
 
-@router.delete("/{channel_id}", status_code=204)
+@router.delete("/{channel_id}", status_code=204, dependencies=[Depends(require_role("admin"))])
 def delete_channel(channel_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     ch = db.get(NotificationChannel, channel_id)
     if not ch or ch.organization_id != user.organization_id:
@@ -103,7 +104,7 @@ def delete_channel(channel_id: uuid.UUID, user: User = Depends(get_current_user)
     db.commit()
 
 
-@router.post("/{channel_id}/test")
+@router.post("/{channel_id}/test", dependencies=[Depends(require_role("admin"))])
 def test_channel(channel_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     ch = db.get(NotificationChannel, channel_id)
     if not ch or ch.organization_id != user.organization_id:

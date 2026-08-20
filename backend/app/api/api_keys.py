@@ -17,6 +17,7 @@ from app.api.auth import get_current_user
 from app.core.apikeys import generate_key
 from app.db.postgres import get_db
 from app.models import ApiKey, Application, User
+from app.core.roles import require_role
 
 router = APIRouter(prefix="/api/v1/applications", tags=["api-keys"])
 
@@ -58,7 +59,7 @@ def list_keys(app_id: uuid.UUID, user: User = Depends(get_current_user), db: Ses
     ).all()
 
 
-@router.post("/{app_id}/keys", response_model=KeyCreated, status_code=201)
+@router.post("/{app_id}/keys", response_model=KeyCreated, status_code=201, dependencies=[Depends(require_role("admin"))])
 def create_key(app_id: uuid.UUID, body: KeyIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     _owned_app(app_id, user, db)
     full_key, prefix, key_hash = generate_key()
@@ -69,7 +70,7 @@ def create_key(app_id: uuid.UUID, body: KeyIn, user: User = Depends(get_current_
     return KeyCreated(id=key.id, prefix=key.prefix, name=key.name, full_key=full_key)
 
 
-@router.delete("/{app_id}/keys/{key_id}", status_code=204)
+@router.delete("/{app_id}/keys/{key_id}", status_code=204, dependencies=[Depends(require_role("admin"))])
 def revoke_key(app_id: uuid.UUID, key_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     _owned_app(app_id, user, db)
     key = db.get(ApiKey, key_id)
