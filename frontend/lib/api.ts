@@ -140,6 +140,7 @@ export async function apiGet<T>(path: string): Promise<T> {
 /* ---------- shared types ---------- */
 
 export type Me = { email: string; role: string; organization_id: string };
+export type OidcStatus = { enabled: boolean; provider_name: string };
 
 export type AuditRow = {
   id: string;

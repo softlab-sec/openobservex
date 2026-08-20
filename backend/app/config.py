@@ -30,6 +30,20 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 480  # 8h; refresh tokens come later
 
+    # SSO / OIDC (additive — password login stays enabled)
+    oidc_enabled: bool = False
+    oidc_issuer: str = ""            # e.g. https://accounts.google.com
+    oidc_client_id: str = ""
+    oidc_client_secret: str = ""
+    oidc_redirect_uri: str = ""      # e.g. http://192.168.253.10:8000/api/v1/auth/oidc/callback
+    oidc_allowed_domains: str = ""   # comma-separated, e.g. "company.com,sub.company.com"
+    oidc_provider_name: str = "sso"  # label shown on the button + in audit
+    frontend_base_url: str = "http://192.168.253.10:3000"  # where to redirect after login
+
+    @property
+    def oidc_allowed_domain_list(self) -> list[str]:
+        return [d.strip().lower() for d in self.oidc_allowed_domains.split(",") if d.strip()]
+
     @property
     def postgres_dsn(self) -> str:
         return (

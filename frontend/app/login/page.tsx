@@ -1,17 +1,46 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { login, setToken } from "@/lib/api";
+import { login, setToken, apiGet, type OidcStatus } from "@/lib/api";
 
 function LoginForm() {
   const router = useRouter();
-  const expired = useSearchParams().get("expired") === "1";
+  const params = useSearchParams();
+  const expired = params.get("expired") === "1";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [sso, setSso] = useState<OidcStatus | null>(null);
+
+  // Land the SSO token (callback redirects here with ?sso_token=...), or show
+  // an SSO error (?sso_error=...).
+  useEffect(() => {
+    const t = params.get("sso_token");
+    if (t) {
+      setToken(t);
+      router.replace("/dashboard");
+      return;
+    }
+    const e = params.get("sso_error");
+    if (e) {
+      const msgs: Record<string, string> = {
+        domain_not_allowed: "Your email domain is not authorized for SSO.",
+        account_disabled: "Your account is disabled. Contact an administrator.",
+        email_unverified: "Your email is not verified with the identity provider.",
+        token_validation_failed: "Sign-in could not be verified. Please try again.",
+        bad_state: "The sign-in request expired or was invalid. Please try again.",
+      };
+      setError(msgs[e] ?? "Single sign-on failed. Please try again.");
+    }
+  }, [params, router]);
+
+  // Show the SSO button only when the server reports it enabled.
+  useEffect(() => {
+    apiGet<OidcStatus>("/api/v1/auth/oidc/status").then(setSso).catch(() => {});
+  }, []);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -67,6 +96,22 @@ function LoginForm() {
         >
           {loading ? "Signing in..." : "Sign in"}
         </button>
+        {sso?.enabled && (
+          <>
+            <div className="flex items-center gap-3 text-xs text-white/30">
+              <div className="h-px flex-1 bg-white/10" />
+              or
+              <div className="h-px flex-1 bg-white/10" />
+            </div>
+            
+              <a
+              href="/api/v1/auth/oidc/login"
+              className="block w-full rounded-lg border border-white/15 bg-white/[0.03] py-2 text-center font-medium text-white/80 transition hover:bg-white/[0.08]"
+            >
+              Sign in with {sso.provider_name}
+            </a>
+          </>
+        )}
         <p className="text-center text-sm text-white/50">
           No account?{" "}
           <Link href="/register" className="text-sky-400 hover:underline">
