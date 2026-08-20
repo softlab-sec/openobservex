@@ -6,5 +6,6 @@ from app.models.channel import NotificationChannel
 from app.models.user import User
 from app.models.anomaly import Anomaly
 from app.models.maintenance import MaintenanceWindow
+from app.models.audit import AuditLog
 
-__all__ = ["Organization", "User", "AlertRule", "Incident", "IncidentEvent", "Application", "ApiKey", "NotificationChannel", "Anomaly", "MaintenanceWindow"]
+__all__ = ["Organization", "User", "AlertRule", "Incident", "IncidentEvent", "Application", "ApiKey", "NotificationChannel", "Anomaly", "MaintenanceWindow", "AuditLog"]

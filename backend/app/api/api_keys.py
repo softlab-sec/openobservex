@@ -8,7 +8,7 @@ applications their own organization owns.
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -18,6 +18,7 @@ from app.core.apikeys import generate_key
 from app.db.postgres import get_db
 from app.models import ApiKey, Application, User
 from app.core.roles import require_role
+from app.core.audit import record_audit
 
 router = APIRouter(prefix="/api/v1/applications", tags=["api-keys"])
 
@@ -71,10 +72,16 @@ def create_key(app_id: uuid.UUID, body: KeyIn, user: User = Depends(get_current_
 
 
 @router.delete("/{app_id}/keys/{key_id}", status_code=204, dependencies=[Depends(require_role("admin"))])
-def revoke_key(app_id: uuid.UUID, key_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def revoke_key(app_id: uuid.UUID, key_id: uuid.UUID, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     _owned_app(app_id, user, db)
     key = db.get(ApiKey, key_id)
     if not key or key.application_id != app_id:
         raise HTTPException(status_code=404, detail="Key not found")
+    record_audit(
+        db, action="api_key.revoke", resource_type="api_key",
+        actor=user, resource_id=key.id, resource_name=key.name,
+        before={"prefix": key.prefix, "name": key.name, "application_id": str(app_id)},
+        request=request,
+    )
     key.revoked_at = datetime.now(timezone.utc)
     db.commit()

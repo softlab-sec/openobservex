@@ -9,7 +9,7 @@ import json
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -19,6 +19,7 @@ from app.db.postgres import get_db
 from app.models import NotificationChannel, User
 from app.services.dispatch import dispatch, parse_config
 from app.core.roles import require_role
+from app.core.audit import record_audit
 
 router = APIRouter(prefix="/api/v1/channels", tags=["channels"])
 
@@ -96,10 +97,16 @@ def update_channel(channel_id: uuid.UUID, body: ChannelIn, user: User = Depends(
 
 
 @router.delete("/{channel_id}", status_code=204, dependencies=[Depends(require_role("admin"))])
-def delete_channel(channel_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def delete_channel(channel_id: uuid.UUID, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     ch = db.get(NotificationChannel, channel_id)
     if not ch or ch.organization_id != user.organization_id:
         raise HTTPException(404, "channel not found")
+    record_audit(
+        db, action="channel.delete", resource_type="channel",
+        actor=user, resource_id=ch.id, resource_name=ch.name,
+        before={"name": ch.name, "type": getattr(ch, "type", None)},
+        request=request,
+    )
     db.delete(ch)
     db.commit()
 

@@ -12,7 +12,7 @@ service's rules.
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -21,6 +21,7 @@ from app.api.auth import get_current_user
 from app.db.postgres import get_db
 from app.models import MaintenanceWindow, User
 from app.core.roles import require_role
+from app.core.audit import record_audit
 
 router = APIRouter(prefix="/api/v1/maintenance", tags=["maintenance"])
 
@@ -88,6 +89,7 @@ def create_window(
 @router.delete("/{window_id}", status_code=204, dependencies=[Depends(require_role("admin"))])
 def delete_window(
     window_id: uuid.UUID,
+    request: Request,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -99,6 +101,12 @@ def delete_window(
     )
     if not w:
         raise HTTPException(status_code=404, detail="Maintenance window not found")
+    record_audit(
+        db, action="maintenance_window.delete", resource_type="maintenance_window",
+        actor=user, resource_id=w.id, resource_name=getattr(w, "name", None),
+        before={"name": getattr(w, "name", None)},
+        request=request,
+    )
     db.delete(w)
     db.commit()
     return None

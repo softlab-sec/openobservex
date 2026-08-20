@@ -8,7 +8,7 @@ isolation real: queries only ever see tags their org owns.
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -17,6 +17,7 @@ from app.api.auth import get_current_user
 from app.db.postgres import get_db
 from app.models import Application, User
 from app.core.roles import require_role
+from app.core.audit import record_audit
 
 router = APIRouter(prefix="/api/v1/applications", tags=["applications"])
 
@@ -80,12 +81,20 @@ def create_application(
 @router.delete("/{app_id}", status_code=204, dependencies=[Depends(require_role("admin"))])
 def delete_application(
     app_id: uuid.UUID,
+    request: Request,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     app = db.get(Application, app_id)
     if not app or app.organization_id != user.organization_id:
         raise HTTPException(status_code=404, detail="Application not found")
+    record_audit(
+        db, action="application.delete", resource_type="application",
+        actor=user, resource_id=app.id, resource_name=app.name,
+        before={"name": app.name},
+        detail="deleting an application also removes its API keys",
+        request=request,
+    )
     db.delete(app)
     db.commit()
 

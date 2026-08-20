@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime, timezone, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -15,6 +15,7 @@ from app.api.applications import tenant_dependency
 from app.models import AlertRule, Incident, IncidentEvent, User, Anomaly
 from app.services import evaluator, notifications
 from app.core.roles import require_role
+from app.core.audit import record_audit
 
 router = APIRouter(prefix="/api/v1/alerts", tags=["alerts"])
 
@@ -155,12 +156,25 @@ def update_rule(
 @router.delete("/rules/{rule_id}", status_code=204, dependencies=[Depends(require_role("admin"))])
 def delete_rule(
     rule_id: uuid.UUID,
+    request: Request,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     rule = db.get(AlertRule, rule_id)
     if not rule or rule.organization_id != user.organization_id:
         raise HTTPException(status_code=404, detail="Rule not found")
+    # Capture the rule state BEFORE deleting, so the audit record survives the
+    # removal (the most valuable event in the trail).
+    before = {
+        "name": rule.name, "kind": rule.kind, "operator": rule.operator,
+        "threshold": rule.threshold, "severity": rule.severity,
+        "service": rule.service, "enabled": rule.enabled,
+    }
+    record_audit(
+        db, action="alert_rule.delete", resource_type="alert_rule",
+        actor=user, resource_id=rule.id, resource_name=rule.name,
+        before=before, request=request,
+    )
     # Detach incidents first so the FK constraint does not block deletion.
     # Incidents are historical facts and are preserved (rule_id set to NULL).
     db.query(Incident).filter(Incident.rule_id == rule_id).update(
