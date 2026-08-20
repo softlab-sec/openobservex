@@ -65,7 +65,7 @@ def list_channels(user: User = Depends(get_current_user), db: Session = Depends(
 
 
 @router.post("", response_model=ChannelOut, status_code=201, dependencies=[Depends(require_role("admin"))])
-def create_channel(body: ChannelIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def create_channel(body: ChannelIn, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if body.kind not in ("email", "slack", "discord", "webhook"):
         raise HTTPException(422, "invalid channel kind")
     ch = NotificationChannel(
@@ -76,11 +76,17 @@ def create_channel(body: ChannelIn, user: User = Depends(get_current_user), db: 
     db.add(ch)
     db.commit()
     db.refresh(ch)
+    record_audit(
+        db, action="channel.create", resource_type="channel",
+        actor=user, resource_id=ch.id, resource_name=ch.name,
+        after={"name": ch.name, "kind": ch.kind, "enabled": ch.enabled},
+        request=request,
+    )
     return _to_out(ch)
 
 
 @router.patch("/{channel_id}", response_model=ChannelOut, dependencies=[Depends(require_role("admin"))])
-def update_channel(channel_id: uuid.UUID, body: ChannelIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def update_channel(channel_id: uuid.UUID, body: ChannelIn, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     ch = db.get(NotificationChannel, channel_id)
     if not ch or ch.organization_id != user.organization_id:
         raise HTTPException(404, "channel not found")
@@ -89,10 +95,20 @@ def update_channel(channel_id: uuid.UUID, body: ChannelIn, user: User = Depends(
     for f in _SECRET_FIELDS:
         if incoming.get(f) in (None, "", "••••••"):
             incoming[f] = existing.get(f, "")
+    _before = {"name": ch.name, "kind": ch.kind, "enabled": ch.enabled}
     ch.name, ch.kind, ch.enabled = body.name, body.kind, body.enabled
     ch.config = json.dumps(incoming)
     db.commit()
     db.refresh(ch)
+    _after = {"name": ch.name, "kind": ch.kind, "enabled": ch.enabled}
+    _bd = {k: _before[k] for k in _before if _before[k] != _after[k]}
+    _ad = {k: _after[k] for k in _after if _before[k] != _after[k]}
+    if _bd:
+        record_audit(
+            db, action="channel.update", resource_type="channel",
+            actor=user, resource_id=ch.id, resource_name=ch.name,
+            before=_bd, after=_ad, request=request,
+        )
     return _to_out(ch)
 
 

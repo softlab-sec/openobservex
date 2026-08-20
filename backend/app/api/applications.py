@@ -60,6 +60,7 @@ def list_applications(
 @router.post("", response_model=AppOut, status_code=201, dependencies=[Depends(require_role("admin"))])
 def create_application(
     body: AppIn,
+    request: Request,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -75,6 +76,12 @@ def create_application(
     db.add(app)
     db.commit()
     db.refresh(app)
+    record_audit(
+        db, action="application.create", resource_type="application",
+        actor=user, resource_id=app.id, resource_name=app.name,
+        after={"name": app.name, "tenant_tag": app.tenant_tag, "namespace": app.namespace},
+        request=request,
+    )
     return app
 
 

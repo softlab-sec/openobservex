@@ -104,6 +104,7 @@ def list_rules(user: User = Depends(get_current_user), db: Session = Depends(get
 @router.post("/rules", response_model=RuleOut, status_code=201, dependencies=[Depends(require_role("member"))])
 def create_rule(
     body: RuleIn,
+    request: Request,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -129,6 +130,16 @@ def create_rule(
     db.add(rule)
     db.commit()
     db.refresh(rule)
+    record_audit(
+        db, action="alert_rule.create", resource_type="alert_rule",
+        actor=user, resource_id=rule.id, resource_name=rule.name,
+        after={
+            "name": rule.name, "kind": rule.kind, "operator": rule.operator,
+            "threshold": rule.threshold, "severity": rule.severity,
+            "service": rule.service, "enabled": rule.enabled,
+        },
+        request=request,
+    )
     return rule
 
 
@@ -136,6 +147,7 @@ def create_rule(
 def update_rule(
     rule_id: uuid.UUID,
     body: RuleIn,
+    request: Request,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -146,10 +158,24 @@ def update_rule(
         raise HTTPException(status_code=400, detail=f"kind must be one of {sorted(KINDS)}")
     if body.operator not in _OPERATORS:
         raise HTTPException(status_code=400, detail=f"operator must be one of {sorted(_OPERATORS)}")
+    # Snapshot the auditable fields before applying the change, so we can record
+    # a focused before/after diff (e.g. threshold 5 -> 10, enabled true -> false).
+    _audit_fields = ("name", "kind", "operator", "threshold", "percentile",
+                     "for_minutes", "severity", "service", "enabled")
+    _before_all = {f: getattr(rule, f) for f in _audit_fields}
     for field, value in body.model_dump().items():
         setattr(rule, field, value or None if field in ("service", "webhook_urls") else value)
     db.commit()
     db.refresh(rule)
+    _after_all = {f: getattr(rule, f) for f in _audit_fields}
+    _before_diff = {f: _before_all[f] for f in _audit_fields if _before_all[f] != _after_all[f]}
+    _after_diff = {f: _after_all[f] for f in _audit_fields if _before_all[f] != _after_all[f]}
+    if _before_diff:  # only log if something actually changed
+        record_audit(
+            db, action="alert_rule.update", resource_type="alert_rule",
+            actor=user, resource_id=rule.id, resource_name=rule.name,
+            before=_before_diff, after=_after_diff, request=request,
+        )
     return rule
 
 
@@ -301,7 +327,7 @@ def incident_timeline(incident_id: uuid.UUID, user: User = Depends(get_current_u
 
 
 @router.post("/incidents/{incident_id}/acknowledge", response_model=IncidentOut, dependencies=[Depends(require_role("member"))])
-def acknowledge_incident(incident_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def acknowledge_incident(incident_id: uuid.UUID, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     inc = _owned_incident(incident_id, user, db)
     if inc.acknowledged_at is None:
         inc.acknowledged_at = datetime.now(timezone.utc)
@@ -309,16 +335,23 @@ def acknowledge_incident(incident_id: uuid.UUID, user: User = Depends(get_curren
         _add_event(db, inc.id, "acknowledged", user.email, None)
         db.commit()
         db.refresh(inc)
+        record_audit(db, action="incident.acknowledge", resource_type="incident",
+                     actor=user, resource_id=inc.id, resource_name=inc.rule_name, request=request)
     return inc
 
 
 @router.post("/incidents/{incident_id}/assign", response_model=IncidentOut, dependencies=[Depends(require_role("member"))])
-def assign_incident(incident_id: uuid.UUID, body: AssignIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def assign_incident(incident_id: uuid.UUID, body: AssignIn, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     inc = _owned_incident(incident_id, user, db)
+    _old_assignee = inc.assigned_to
     inc.assigned_to = body.assignee
     _add_event(db, inc.id, "assigned", user.email, f"assigned to {body.assignee}")
     db.commit()
     db.refresh(inc)
+    record_audit(db, action="incident.assign", resource_type="incident",
+                 actor=user, resource_id=inc.id, resource_name=inc.rule_name,
+                 before={"assigned_to": _old_assignee}, after={"assigned_to": body.assignee},
+                 request=request)
     return inc
 
 
@@ -333,7 +366,7 @@ def add_note(incident_id: uuid.UUID, body: NoteIn, user: User = Depends(get_curr
 
 
 @router.post("/incidents/{incident_id}/resolve", response_model=IncidentOut, dependencies=[Depends(require_role("member"))])
-def resolve_incident(incident_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def resolve_incident(incident_id: uuid.UUID, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     inc = _owned_incident(incident_id, user, db)
     if inc.status != "resolved":
         inc.status = "resolved"
@@ -341,6 +374,8 @@ def resolve_incident(incident_id: uuid.UUID, user: User = Depends(get_current_us
         _add_event(db, inc.id, "resolved", user.email, "manually resolved")
         db.commit()
         db.refresh(inc)
+        record_audit(db, action="incident.resolve", resource_type="incident",
+                     actor=user, resource_id=inc.id, resource_name=inc.rule_name, request=request)
     return inc
 
 

@@ -61,13 +61,19 @@ def list_keys(app_id: uuid.UUID, user: User = Depends(get_current_user), db: Ses
 
 
 @router.post("/{app_id}/keys", response_model=KeyCreated, status_code=201, dependencies=[Depends(require_role("admin"))])
-def create_key(app_id: uuid.UUID, body: KeyIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def create_key(app_id: uuid.UUID, body: KeyIn, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     _owned_app(app_id, user, db)
     full_key, prefix, key_hash = generate_key()
     key = ApiKey(application_id=app_id, prefix=prefix, key_hash=key_hash, name=body.name)
     db.add(key)
     db.commit()
     db.refresh(key)
+    record_audit(
+        db, action="api_key.create", resource_type="api_key",
+        actor=user, resource_id=key.id, resource_name=key.name,
+        after={"prefix": key.prefix, "name": key.name, "application_id": str(app_id)},
+        request=request,
+    )
     return KeyCreated(id=key.id, prefix=key.prefix, name=key.name, full_key=full_key)
 
 
