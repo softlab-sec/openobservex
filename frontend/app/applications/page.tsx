@@ -5,8 +5,10 @@ import Shell from "@/components/Shell";
 import {
   apiGet, apiSend, type Application, type ApiKeyRow, type ApiKeyCreated,
 } from "@/lib/api";
+import { useRole, canManage } from "@/lib/role";
 
 export default function ApplicationsPage() {
+  const role = useRole();
   const [apps, setApps] = useState<Application[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [keys, setKeys] = useState<ApiKeyRow[]>([]);
@@ -134,12 +136,14 @@ export default function ApplicationsPage() {
                   placeholder="Key name (e.g. production)"
                   className="flex-1 rounded-lg border border-white/10 bg-black/30 px-3 py-1.5 text-sm outline-none focus:border-white/40"
                 />
+{canManage(role) && (
                 <button
                   onClick={generate}
                   className="rounded-lg border border-violet-400/40 bg-violet-500/15 px-3 py-1.5 text-sm text-violet-200 hover:bg-violet-500/25"
                 >
                   Generate key
                 </button>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -158,7 +162,7 @@ export default function ApplicationsPage() {
                         {k.last_used_at ? `last used ${new Date(k.last_used_at).toLocaleString()}` : "never used"}
                       </div>
                     </div>
-                    {!k.revoked_at && (
+                    {!k.revoked_at && canManage(role) && (
                       <button
                         onClick={() => revoke(k.id)}
                         className="rounded-md border border-red-400/30 px-2 py-1 text-xs text-red-300 hover:bg-red-500/15"

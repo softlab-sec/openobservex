@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Shell from "@/components/Shell";
 import { apiGet, apiSend, type NotificationChannel } from "@/lib/api";
+import { useRole, canManage } from "@/lib/role";
 
 type Kind = "email" | "slack" | "discord" | "webhook";
 
@@ -21,6 +22,7 @@ function emptyConfig(kind: Kind): Record<string, string | boolean> {
 }
 
 export default function ChannelsPage() {
+  const role = useRole();
   const [channels, setChannels] = useState<NotificationChannel[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<Record<string, string>>({});
@@ -78,9 +80,9 @@ export default function ChannelsPage() {
           <h1 className="text-xl font-semibold tracking-tight">Notifications</h1>
           <p className="text-sm text-white/40">Where alerts are delivered. Configure once, then attach to alert rules.</p>
         </div>
-        <button onClick={openNew} className="rounded-lg border border-violet-400/40 bg-violet-500/15 px-3 py-1.5 text-sm text-violet-200 hover:bg-violet-500/25">
+        {canManage(role) && <button onClick={openNew} className="rounded-lg border border-violet-400/40 bg-violet-500/15 px-3 py-1.5 text-sm text-violet-200 hover:bg-violet-500/25">
           Add notification
-        </button>
+        </button>}
       </div>
 
       {err && <p className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{err}</p>}
@@ -154,9 +156,9 @@ export default function ChannelsPage() {
               )}
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={() => test(ch.id)} className="rounded-md border border-white/15 px-2 py-1 text-xs text-white/60 hover:text-white">Test</button>
-              <button onClick={() => openEdit(ch)} className="rounded-md border border-white/15 px-2 py-1 text-xs text-white/60 hover:text-white">Edit</button>
-              <button onClick={() => remove(ch.id)} className="rounded-md border border-red-400/30 px-2 py-1 text-xs text-red-300 hover:bg-red-500/15">Delete</button>
+              {canManage(role) && <button onClick={() => test(ch.id)} className="rounded-md border border-white/15 px-2 py-1 text-xs text-white/60 hover:text-white">Test</button>}
+              {canManage(role) && <button onClick={() => openEdit(ch)} className="rounded-md border border-white/15 px-2 py-1 text-xs text-white/60 hover:text-white">Edit</button>}
+              {canManage(role) && <button onClick={() => remove(ch.id)} className="rounded-md border border-red-400/30 px-2 py-1 text-xs text-red-300 hover:bg-red-500/15">Delete</button>}
             </div>
           </div>
         ))}

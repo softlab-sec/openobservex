@@ -3,6 +3,7 @@ import { useCallback, useState } from "react";
 import Shell, { usePoll } from "@/components/Shell";
 import { Card } from "@/components/ui";
 import { apiGet, apiSend, type MaintenanceWindow } from "@/lib/api";
+import { useRole, canManage, canOperate } from "@/lib/role";
 
 function toLocalInput(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -14,6 +15,7 @@ function fmt(iso: string): string {
 }
 
 export default function MaintenancePage() {
+  const role = useRole();
   const [windows, setWindows] = useState<MaintenanceWindow[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -126,6 +128,7 @@ export default function MaintenancePage() {
           </label>
         </div>
         <div className="mt-3">
+{canOperate(role) && (
           <button
             onClick={create}
             disabled={busy}
@@ -133,6 +136,7 @@ export default function MaintenancePage() {
           >
             {busy ? "Scheduling..." : "Schedule Window"}
           </button>
+          )}
         </div>
       </Card>
 
@@ -172,12 +176,14 @@ export default function MaintenancePage() {
                         )}
                       </td>
                       <td className="px-4 py-2.5 text-right">
+{canManage(role) && (
                         <button
                           onClick={() => remove(w.id)}
                           className="rounded-md border border-white/15 px-2.5 py-1 text-xs text-white/70 transition hover:border-red-400/40 hover:text-red-300"
                         >
                           Delete
                         </button>
+                        )}
                       </td>
                     </tr>
                   ))}
