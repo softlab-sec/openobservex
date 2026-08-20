@@ -5,6 +5,7 @@ import Link from "next/link";
 import Shell, { usePoll } from "@/components/Shell";
 import ServiceSelect from "@/components/ServiceSelect";
 import { sevMeta, since } from "@/lib/severity";
+import { useRole, canManage, canOperate } from "@/lib/role";
 import { RangePicker } from "@/components/ui";
 import {
   apiGet, apiSend,
@@ -127,6 +128,7 @@ function FiringAlerts({ minutes, filter, rules }: {
   filter: "all" | "info" | "warning" | "high" | "critical" | "ack";
   rules: AlertRule[];
 }) {
+  const role = useRole();
   const [alerts, setAlerts] = useState<IncidentRow[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const load = useCallback(() => {
@@ -207,12 +209,12 @@ function FiringAlerts({ minutes, filter, rules }: {
                       {r && <span><span className="text-white/35">Sustained: </span><span className="text-white/70">{r.for_minutes}m</span></span>}
                     </div>
                     <div className="mt-3 flex flex-wrap items-center gap-2">
-                      {!ackd && (
+                      {!ackd && canOperate(role) && (
                         <button disabled={busy === a.id} onClick={() => act(a.id, "acknowledge")}
                           className="rounded-lg border border-amber-400/40 bg-amber-500/15 px-3 py-1 text-xs text-amber-200 hover:bg-amber-500/25">Acknowledge</button>
                       )}
-                      <button disabled={busy === a.id} onClick={() => act(a.id, "resolve")}
-                        className="rounded-lg border border-emerald-400/40 bg-emerald-500/15 px-3 py-1 text-xs text-emerald-200 hover:bg-emerald-500/25">Resolve</button>
+                      {canOperate(role) && <button disabled={busy === a.id} onClick={() => act(a.id, "resolve")}
+                        className="rounded-lg border border-emerald-400/40 bg-emerald-500/15 px-3 py-1 text-xs text-emerald-200 hover:bg-emerald-500/25">Resolve</button>}
                       <a href={`/incidents/${a.id}`}
                         className="rounded-lg border border-white/15 px-3 py-1 text-xs text-white/70 hover:bg-white/5">Open incident →</a>
                     </div>
@@ -462,6 +464,7 @@ function RuleModal({
 }
 
 export default function AlertsPage() {
+  const role = useRole();
   const [rules, setRules] = useState<AlertRule[]>([]);
   const [incidents, setIncidents] = useState<IncidentRow[]>([]);
   const [minutes, setMinutes] = useState(60);
@@ -565,8 +568,8 @@ export default function AlertsPage() {
             {firingCount > 0 && <span className="text-rose-300"> · {firingCount} active</span>}
           </p>
         </div>
-        <button onClick={() => setModal({ open: true, rule: null })}
-          className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black hover:bg-white/90">+ New rule</button>
+        {canOperate(role) && <button onClick={() => setModal({ open: true, rule: null })}
+          className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black hover:bg-white/90">+ New rule</button>}
       </div>
 
       {err && <p className="mb-4 rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-300">{err}</p>}
@@ -613,14 +616,14 @@ export default function AlertsPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button onClick={() => toggle(r)}
+                  {canOperate(role) && <button onClick={() => toggle(r)}
                     className={`rounded-full px-2.5 py-1 text-xs transition ${r.enabled ? "bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25" : "bg-white/10 text-white/40 hover:bg-white/15"}`}>
                     {r.enabled ? "enabled" : "disabled"}
-                  </button>
-                  <button onClick={() => setModal({ open: true, rule: r })}
-                    className="rounded-lg border border-white/10 px-2.5 py-1 text-xs text-white/60 hover:bg-white/5">Edit</button>
-                  <button onClick={() => remove(r)}
-                    className="rounded-lg border border-rose-400/30 px-2.5 py-1 text-xs text-rose-300 hover:bg-rose-500/10">Delete</button>
+                  </button>}
+                  {canOperate(role) && <button onClick={() => setModal({ open: true, rule: r })}
+                    className="rounded-lg border border-white/10 px-2.5 py-1 text-xs text-white/60 hover:bg-white/5">Edit</button>}
+                  {canManage(role) && <button onClick={() => remove(r)}
+                    className="rounded-lg border border-rose-400/30 px-2.5 py-1 text-xs text-rose-300 hover:bg-rose-500/10">Delete</button>}
                 </div>
               </div>
             </div>

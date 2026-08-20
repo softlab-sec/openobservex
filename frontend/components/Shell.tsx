@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { apiGet, clearToken, getToken, type Me } from "@/lib/api";
+import { RoleContext } from "@/lib/role";
 
 type NavItem = { href: string; label: string; icon: string };
 type NavGroup = { title: string; items: NavItem[] };
@@ -153,7 +154,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           </button>
         </div>
       </aside>
-      <main className="flex-1 overflow-x-auto p-6">{children}</main>
+      <main className="flex-1 overflow-x-auto p-6"><RoleContext.Provider value={me?.role}>{children}</RoleContext.Provider></main>
     </div>
   );
 }
