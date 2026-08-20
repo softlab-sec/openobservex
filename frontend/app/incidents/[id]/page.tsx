@@ -5,6 +5,7 @@ import { use, useCallback, useEffect, useState } from "react";
 import Shell from "@/components/Shell";
 import { apiGet, apiSend, type IncidentRow, type IncidentEvent, type IncidentEvidence } from "@/lib/api";
 import { sevMeta, since, duration } from "@/lib/severity";
+import { useRole, canOperate } from "@/lib/role";
 import IncidentTopology from "@/components/IncidentTopology";
 
 const KIND_LABEL: Record<string, string> = {
@@ -21,6 +22,7 @@ const EVENT_META: Record<string, { label: string; dot: string }> = {
 };
 
 export default function IncidentDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const role = useRole();
   const { id } = use(params);
   const [inc, setInc] = useState<IncidentRow | null>(null);
   const [events, setEvents] = useState<IncidentEvent[]>([]);
@@ -99,20 +101,20 @@ export default function IncidentDetailPage({ params }: { params: Promise<{ id: s
 
       {/* ACTION TOOLBAR — operational */}
       <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-white/[0.02] p-2.5">
-        {firing && !ackd && (
+        {firing && !ackd && canOperate(role) && (
           <button disabled={busy} onClick={() => act(() => apiSend(`/api/v1/alerts/incidents/${id}/acknowledge`, "POST"))}
             className="rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-1.5 text-sm text-amber-300 transition hover:bg-amber-500/20 disabled:opacity-50">Acknowledge</button>
         )}
-        {firing && (
+        {firing && canOperate(role) && (
           <button disabled={busy} onClick={() => act(() => apiSend(`/api/v1/alerts/incidents/${id}/resolve`, "POST"))}
             className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-1.5 text-sm text-emerald-300 transition hover:bg-emerald-500/20 disabled:opacity-50">Resolve incident</button>
         )}
         <div className="ml-auto flex items-center gap-2">
           <input value={assignee} onChange={(e) => setAssignee(e.target.value)} placeholder="assign to someone…"
             className="w-40 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5 text-sm text-white/80 placeholder:text-white/30 focus:outline-none" />
-          <button disabled={busy || !assignee.trim()}
+{canOperate(role) &&           <button disabled={busy || !assignee.trim()}
             onClick={() => act(async () => { await apiSend(`/api/v1/alerts/incidents/${id}/assign`, "POST", { assignee: assignee.trim() }); setAssignee(""); })}
-            className="rounded-lg border border-white/15 bg-white/[0.03] px-3 py-1.5 text-sm text-white/70 transition hover:bg-white/[0.08] disabled:opacity-40">Assign</button>
+            className="rounded-lg border border-white/15 bg-white/[0.03] px-3 py-1.5 text-sm text-white/70 transition hover:bg-white/[0.08] disabled:opacity-40">Assign</button>}
         </div>
       </div>
 
@@ -218,9 +220,9 @@ export default function IncidentDetailPage({ params }: { params: Promise<{ id: s
         <div className="mt-4 flex gap-2 border-t border-white/10 pt-4">
           <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a note to the timeline…"
             className="flex-1 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white/80 placeholder:text-white/30 focus:outline-none" />
-          <button disabled={busy || !note.trim()}
+          {canOperate(role) && <button disabled={busy || !note.trim()}
             onClick={() => act(async () => { await apiSend(`/api/v1/alerts/incidents/${id}/note`, "POST", { detail: note.trim() }); setNote(""); })}
-            className="rounded-lg border border-white/15 bg-white/[0.03] px-4 py-2 text-sm text-white/70 transition hover:bg-white/[0.08] disabled:opacity-40">Add note</button>
+            className="rounded-lg border border-white/15 bg-white/[0.03] px-4 py-2 text-sm text-white/70 transition hover:bg-white/[0.08] disabled:opacity-40">Add note</button>}
         </div>
       </div>
 
