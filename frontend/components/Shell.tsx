@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { apiGet, clearToken, getToken, type Me } from "@/lib/api";
 import { RoleContext } from "@/lib/role";
 
-type NavItem = { href: string; label: string; icon: string };
+type NavItem = { href: string; label: string; icon: string; adminOnly?: boolean };
 type NavGroup = { title: string; items: NavItem[] };
 
 const NAV_GROUPS: NavGroup[] = [
@@ -35,6 +35,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/applications", label: "Applications", icon: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z" },
       { href: "/channels", label: "Notifications", icon: "M4 4h16v12H5.2L4 17.2V4z" },
       { href: "/system", label: "System Health", icon: "M4 12h4l2-5 3 10 2-5h5" },
+      { href: "/audit", label: "Audit Log", icon: "M9 12l2 2 4-4M7.8 3h8.4a2 2 0 011.8 1.1l1.9 3.8a2 2 0 01.1.9V19a2 2 0 01-2 2H6a2 2 0 01-2-2V8.8a2 2 0 01.1-.9l1.9-3.8A2 2 0 017.8 3z", adminOnly: true },
     ],
   },
 ];
@@ -111,7 +112,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                 </div>
               )}
               <div className="space-y-1">
-                {group.items.map((n) => {
+                {group.items.filter((n) => !n.adminOnly || me?.role === "admin").map((n) => {
                   const active = n.href === "/" ? pathname === "/" : (pathname === n.href || pathname.startsWith(n.href + "/"));
                   return (
                     <Link

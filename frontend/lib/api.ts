@@ -141,6 +141,27 @@ export async function apiGet<T>(path: string): Promise<T> {
 
 export type Me = { email: string; role: string; organization_id: string };
 
+export type AuditRow = {
+  id: string;
+  created_at: string;
+  actor_email: string;
+  actor_role: string;
+  action: string;
+  resource_type: string;
+  resource_id: string | null;
+  resource_name: string | null;
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
+  ip_address: string | null;
+  detail: string | null;
+};
+export type AuditPage = {
+  rows: AuditRow[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
 export type Overview = {
   requests: number;
   errors: number;
