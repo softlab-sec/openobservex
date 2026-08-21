@@ -87,6 +87,8 @@ def evaluate_slo(slo) -> dict:
 
     result: dict = {
         "total_events": total,
+        "good_events": good,
+        "bad_events": total - good,
         "last_evaluated_at": datetime.now(timezone.utc),
     }
 
@@ -137,10 +139,30 @@ def evaluate_slo(slo) -> dict:
 SLO_INTERVAL = 300  # 5 minutes
 
 
+# status keys that live on the SLO row itself (the cached snapshot). good/bad
+# event counts are history-only and deliberately not stored on the SLO.
+_SLO_STATUS_COLUMNS = (
+    "current_sli", "budget_remaining_pct", "burn_rate",
+    "total_events", "is_meeting", "last_evaluated_at",
+)
+
+
+def apply_status(slo, status: dict) -> None:
+    """Copy the cached-status fields from an evaluation onto the SLO row."""
+    for k in _SLO_STATUS_COLUMNS:
+        if k in status:
+            setattr(slo, k, status[k])
+
+
 def evaluate_all_slos() -> int:
-    """Evaluate every enabled SLO and cache its status. Returns the count."""
+    """Evaluate every enabled SLO, cache its status, and append a history row.
+
+    The cached status on the SLO answers "what is it now"; the history row is
+    the time series that later powers breach duration, burn trend, projected
+    exhaustion, and reporting.
+    """
     from sqlalchemy import select
-    from app.models import SLO
+    from app.models import SLO, SLOStatusHistory
 
     db = SessionLocal()
     checked = 0
@@ -149,8 +171,18 @@ def evaluate_all_slos() -> int:
         for slo in slos:
             try:
                 status = evaluate_slo(slo)
-                for k, v in status.items():
-                    setattr(slo, k, v)
+                apply_status(slo, status)
+                db.add(SLOStatusHistory(
+                    slo_id=slo.id,
+                    organization_id=slo.organization_id,
+                    current_sli=status.get("current_sli"),
+                    budget_remaining_pct=status.get("budget_remaining_pct"),
+                    burn_rate=status.get("burn_rate"),
+                    good_events=status.get("good_events"),
+                    bad_events=status.get("bad_events"),
+                    total_events=status.get("total_events"),
+                    is_meeting=status.get("is_meeting"),
+                ))
                 checked += 1
             except Exception:  # noqa: BLE001
                 logger.exception("failed to evaluate SLO %s", slo.name)

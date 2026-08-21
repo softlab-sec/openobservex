@@ -188,8 +188,9 @@ def evaluate_slo_now(
     """Compute this SLO's status immediately and store it (no waiting for the worker)."""
     slo = _get_owned(slo_id, user, db)
     status = slo_engine.evaluate_slo(slo)
-    for k, v in status.items():
-        setattr(slo, k, v)
+    # on-demand refresh updates the cached snapshot only; the worker owns the
+    # evenly-spaced history series that the analytics depend on.
+    slo_engine.apply_status(slo, status)
     db.commit()
     db.refresh(slo)
     return slo
