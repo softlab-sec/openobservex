@@ -83,6 +83,11 @@ function LoginForm() {
           onChange={(e) => setPassword(e.target.value)}
           className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 outline-none focus:border-white/40"
         />
+        <div className="text-right">
+          <Link href="/forgot-password" className="text-xs text-white/40 transition hover:text-white/70">
+            Forgot password?
+          </Link>
+        </div>
         {expired && !error && (
           <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 text-sm text-amber-300">
             Your session expired. Please sign in again.

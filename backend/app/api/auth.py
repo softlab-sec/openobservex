@@ -4,7 +4,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from app.core.audit import record_audit
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -25,14 +25,30 @@ class RegisterRequest(BaseModel):
     # person
     full_name: str = Field(min_length=2, max_length=255)
     email: EmailStr
-    password: str = Field(min_length=8, max_length=128)
+    password: str = Field(min_length=12, max_length=128)
     job_title: str | None = Field(default=None, max_length=128)
+    department: str | None = Field(default=None, max_length=128)
     phone: str | None = Field(default=None, max_length=32)
     # company
     organization_name: str = Field(min_length=2, max_length=255)
     industry: str | None = Field(default=None, max_length=128)
     company_size: str | None = Field(default=None, max_length=32)
     country: str | None = Field(default=None, max_length=96)
+
+    @field_validator("password")
+    @classmethod
+    def _password_policy(cls, v: str) -> str:
+        import re
+        checks = [
+            (r"[A-Z]", "an uppercase letter"),
+            (r"[a-z]", "a lowercase letter"),
+            (r"[0-9]", "a number"),
+            (r"[^A-Za-z0-9]", "a special character"),
+        ]
+        missing = [label for pattern, label in checks if not re.search(pattern, v)]
+        if missing:
+            raise ValueError("Password must contain " + ", ".join(missing) + ".")
+        return v
 
 
 class TokenResponse(BaseModel):
@@ -78,6 +94,7 @@ def register(body: RegisterRequest, request: Request, db: Session = Depends(get_
         hashed_password=hash_password(body.password),
         full_name=body.full_name,
         job_title=body.job_title,
+        department=body.department,
         phone=body.phone,
         role="admin",  # first user of an org is its admin
         organization_id=org.id,

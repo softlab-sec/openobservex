@@ -30,6 +30,7 @@ export type RegisterPayload = {
   email: string;
   password: string;
   job_title?: string;
+  department?: string;
   phone?: string;
   organization_name: string;
   industry?: string;
