@@ -17,6 +17,7 @@ export default function LogsPage() {
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [trace, setTrace] = useState<TraceDetail | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<number | null>(null);
 
   const load = useCallback(() => {
     const params = new URLSearchParams({ minutes: String(minutes), limit: "100" });
@@ -129,57 +130,69 @@ export default function LogsPage() {
         </Card>
       )}
 
-      <Card>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="text-white/40">
-              <tr>
-                <th className="py-2 font-medium">Time</th>
-                <th className="py-2 font-medium">Level</th>
-                <th className="py-2 font-medium">Service</th>
-                <th className="py-2 font-medium">Message</th>
-                <th className="py-2 font-medium">Trace</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r, i) => (
-                <tr
-                  key={i}
-                  className={`border-t border-white/5 transition ${
-                    trace && trace.trace_id === r.TraceId
-                      ? "bg-sky-500/10"
-                      : "hover:bg-white/[0.03]"
-                  }`}
+      <div className="overflow-hidden rounded-xl border border-white/10 bg-black/20">
+        <div className="divide-y divide-white/5 font-mono text-[13px] leading-relaxed">
+          {rows.map((r, i) => {
+            const lvl = r.SeverityText.toUpperCase();
+            const accent =
+              lvl === "ERROR"
+                ? "border-l-red-500/70 bg-red-500/[0.04]"
+                : lvl === "WARN" || lvl === "WARNING"
+                  ? "border-l-amber-500/70 bg-amber-500/[0.03]"
+                  : "border-l-sky-500/40";
+            const isOpen = expanded === i;
+            const correlated = trace && trace.trace_id === r.TraceId;
+            return (
+              <div key={i} className={`border-l-2 ${accent} ${correlated ? "ring-1 ring-inset ring-sky-500/40" : ""}`}>
+                <button
+                  onClick={() => setExpanded(isOpen ? null : i)}
+                  className="flex w-full items-baseline gap-3 px-3 py-1.5 text-left transition hover:bg-white/[0.03]"
                 >
-                  <td className="py-2 font-mono text-xs text-white/50">
-                    {new Date(r.Timestamp).toLocaleTimeString()}
-                  </td>
-                  <td className="py-2">
+                  <span className="shrink-0 tabular-nums text-white/35">
+                    {new Date(r.Timestamp).toLocaleTimeString([], { hour12: false })}
+                  </span>
+                  <span className="shrink-0">
                     <SeverityBadge level={r.SeverityText} />
-                  </td>
-                  <td className="py-2 text-white/70">{r.ServiceName}</td>
-                  <td className="py-2 font-mono text-xs text-white/80">{r.Body}</td>
-                  <td className="py-2">
-                    {r.TraceId ? (
-                      <button
-                        onClick={() => openTrace(r.TraceId)}
-                        className="font-mono text-xs text-sky-400 hover:underline"
-                      >
-                        {r.TraceId.slice(0, 12)}...
-                      </button>
-                    ) : (
-                      <span className="text-white/20">-</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </span>
+                  <span className="shrink-0 text-white/45">{r.ServiceName}</span>
+                  <span className="flex-1 truncate text-white/85">{r.Body}</span>
+                  {r.TraceId && (
+                    <span className="shrink-0 text-[10px] text-sky-400/50" title="has correlated trace">trace</span>
+                  )}
+                </button>
+                {isOpen && (
+                  <div className="space-y-2 border-t border-white/5 bg-black/30 px-3 py-3 text-xs">
+                    <div className="whitespace-pre-wrap break-words text-white/80">{r.Body}</div>
+                    <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-white/50">
+                      <span className="text-white/30">Timestamp</span>
+                      <span className="tabular-nums">{new Date(r.Timestamp).toISOString()}</span>
+                      <span className="text-white/30">Service</span>
+                      <span>{r.ServiceName}</span>
+                      <span className="text-white/30">Severity</span>
+                      <span>{lvl}</span>
+                      {r.SpanId && (<><span className="text-white/30">Span</span><span>{r.SpanId}</span></>)}
+                      {r.TraceId && (
+                        <>
+                          <span className="text-white/30">Trace</span>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); openTrace(r.TraceId); }}
+                            className="text-left text-sky-400 hover:underline"
+                          >
+                            {r.TraceId} — view waterfall
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
           {rows.length === 0 && (
-            <p className="py-6 text-center text-sm text-white/30">No logs match</p>
+            <p className="py-10 text-center text-sm text-white/30">No logs match these filters.</p>
           )}
         </div>
-      </Card>
+      </div>
     </Shell>
   );
 }
