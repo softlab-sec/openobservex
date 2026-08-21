@@ -26,17 +26,28 @@ async def lifespan(app: FastAPI):
     # Schema is owned by Alembic migrations (see backend/alembic).
     # Run them with: docker compose exec backend alembic upgrade head
     import asyncio
+    import logging
+    from app.config import settings
 
-    from app.services.evaluator import evaluator_loop
-    from app.services.detector import detector_loop
+    tasks: list[asyncio.Task] = []
+    if settings.run_workers_in_api:
+        from app.services.evaluator import evaluator_loop
+        from app.services.detector import detector_loop
 
-    task = asyncio.create_task(evaluator_loop())
-    detector_task = asyncio.create_task(detector_loop())
+        tasks.append(asyncio.create_task(evaluator_loop()))
+        tasks.append(asyncio.create_task(detector_loop()))
+        logging.getLogger("uvicorn.error").info(
+            "background workers running IN-API (run_workers_in_api=true)"
+        )
+    else:
+        logging.getLogger("uvicorn.error").info(
+            "background workers NOT in-API (expecting dedicated worker process)"
+        )
     try:
         yield
     finally:
-        task.cancel()
-        detector_task.cancel()
+        for t in tasks:
+            t.cancel()
 
 
 app = FastAPI(

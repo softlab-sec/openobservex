@@ -105,6 +105,35 @@ services:
       retries: 5
       start_period: 20s
 
+  worker:
+    build: ./backend
+    container_name: oox-worker
+    restart: unless-stopped
+    command: ["python", "-m", "app.worker"]
+    environment:
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: 8123
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      JWT_SECRET: ${JWT_SECRET}
+      OLLAMA_URL: http://ollama:11434
+      OLLAMA_MODEL: llama3.2:3b
+      RUN_WORKERS_IN_API: "false"
+    volumes:
+      - ./backend:/app
+    networks:
+      - oox
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
   frontend:
     build: ./frontend
     container_name: oox-frontend

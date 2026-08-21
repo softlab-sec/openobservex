@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 480  # 8h; refresh tokens come later
 
+    # Background workers (alert evaluator + anomaly detector). When the dedicated
+    # worker process runs (see app/worker.py + the "worker" compose service),
+    # the API sets this false so the loops run in exactly ONE place. Set true to
+    # run them inside the API (single-process dev, or if the worker is disabled).
+    run_workers_in_api: bool = False
+
     # SSO / OIDC (additive — password login stays enabled)
     oidc_enabled: bool = False
     oidc_issuer: str = ""            # e.g. https://accounts.google.com
