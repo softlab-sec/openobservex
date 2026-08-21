@@ -7,5 +7,6 @@ from app.models.user import User
 from app.models.anomaly import Anomaly
 from app.models.maintenance import MaintenanceWindow
 from app.models.audit import AuditLog
+from app.models.slo import SLO
 
-__all__ = ["Organization", "User", "AlertRule", "Incident", "IncidentEvent", "Application", "ApiKey", "NotificationChannel", "Anomaly", "MaintenanceWindow", "AuditLog"]
+__all__ = ["Organization", "User", "AlertRule", "Incident", "IncidentEvent", "Application", "ApiKey", "NotificationChannel", "Anomaly", "MaintenanceWindow", "AuditLog", "SLO"]

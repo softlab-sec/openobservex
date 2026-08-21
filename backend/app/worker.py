@@ -19,6 +19,7 @@ import signal
 import app.models  # noqa: F401  (register models on Base.metadata)
 from app.services.evaluator import evaluator_loop
 from app.services.detector import detector_loop
+from app.services.slo import slo_loop
 
 logging.basicConfig(
     level=logging.INFO,
@@ -32,6 +33,7 @@ async def main() -> None:
     tasks = [
         asyncio.create_task(evaluator_loop(), name="evaluator"),
         asyncio.create_task(detector_loop(), name="detector"),
+        asyncio.create_task(slo_loop(), name="slo"),
     ]
 
     stop = asyncio.Event()

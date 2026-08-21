@@ -597,3 +597,31 @@ export type MaintenanceWindow = {
   created_at: string;
   active: boolean;
 };
+
+export type Slo = {
+  id: string;
+  name: string;
+  sli_type: "availability" | "latency";
+  service: string | null;
+  target: number;
+  window_days: number;
+  latency_threshold_ms: number | null;
+  enabled: boolean;
+  current_sli: number | null;
+  budget_remaining_pct: number | null;
+  burn_rate: number | null;
+  total_events: number | null;
+  is_meeting: boolean | null;
+  last_evaluated_at: string | null;
+  created_at: string;
+};
+
+export type SloInput = {
+  name: string;
+  sli_type: "availability" | "latency";
+  service?: string | null;
+  target: number;
+  window_days: number;
+  latency_threshold_ms?: number | null;
+  enabled?: boolean;
+};
