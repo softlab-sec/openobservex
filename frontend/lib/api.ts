@@ -601,8 +601,14 @@ export type MaintenanceWindow = {
 export type Slo = {
   id: string;
   name: string;
+  description: string | null;
+  owner: string | null;
+  team: string | null;
+  tags: string | null;
   sli_type: "availability" | "latency";
+  target_kind: "service" | "api" | "endpoint" | "infrastructure";
   service: string | null;
+  target_ref: string | null;
   target: number;
   window_days: number;
   latency_threshold_ms: number | null;
@@ -618,10 +624,22 @@ export type Slo = {
 
 export type SloInput = {
   name: string;
+  description?: string | null;
+  owner?: string | null;
+  team?: string | null;
+  tags?: string | null;
   sli_type: "availability" | "latency";
+  target_kind?: "service" | "api" | "endpoint" | "infrastructure";
   service?: string | null;
+  target_ref?: string | null;
   target: number;
   window_days: number;
   latency_threshold_ms?: number | null;
   enabled?: boolean;
+};
+
+export type SloInventory = {
+  services: string[];
+  endpoints: { service: string; endpoint: string }[];
+  infrastructure: string[];
 };
