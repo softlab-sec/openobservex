@@ -52,13 +52,42 @@ def _good_predicate(sli_type: str, latency_threshold_ms: float | None) -> str:
     return "StatusCode != 'Error'"
 
 
-def _counts(good_pred: str, service: str | None, since_hours: float) -> tuple[int, int]:
-    """Return (good, total) over the last `since_hours` hours, optional service."""
-    svc_clause = ""
+def _counts(
+    good_pred: str,
+    target_kind: str,
+    service: str | None,
+    target_ref: str | None,
+    since_hours: float,
+) -> tuple[int, int]:
+    """Return (good, total) over the last `since_hours` hours, scoped to the
+    SLO's actual target. Scope by target_kind:
+      service        -> ServiceName = service
+      api / endpoint -> ServiceName = service AND SpanName = target_ref (the route)
+      infrastructure -> ResourceAttributes['service.instance.id'] = target_ref (host)
+    A missing ref for api/endpoint/infra would silently widen scope, so we
+    fail closed to zero rather than report a wrong (parent-scoped) SLI.
+    """
     params: dict = {"hrs": since_hours}
-    if service:
-        svc_clause = "AND ServiceName = {svc:String}"
+    clauses: list[str] = []
+
+    if target_kind in ("api", "endpoint"):
+        if not (service and target_ref):
+            return 0, 0
+        clauses.append("ServiceName = {svc:String}")
+        clauses.append("SpanName = {ref:String}")
         params["svc"] = service
+        params["ref"] = target_ref
+    elif target_kind == "infrastructure":
+        if not target_ref:
+            return 0, 0
+        clauses.append("ResourceAttributes['service.instance.id'] = {ref:String}")
+        params["ref"] = target_ref
+    else:  # service (or any default): scope to the owning service if named
+        if service:
+            clauses.append("ServiceName = {svc:String}")
+            params["svc"] = service
+
+    scope_clause = ("AND " + " AND ".join(clauses)) if clauses else ""
     sql = f"""
         SELECT
             countIf({good_pred}) AS good,
@@ -66,7 +95,7 @@ def _counts(good_pred: str, service: str | None, since_hours: float) -> tuple[in
         FROM otel_traces
         WHERE Timestamp >= now() - INTERVAL {{hrs:Float64}} HOUR
           AND ParentSpanId = ''
-          {svc_clause}
+          {scope_clause}
     """
     rows = ch_query(sql, params).result_rows
     if not rows:
@@ -83,7 +112,7 @@ def evaluate_slo(slo) -> dict:
     good_pred = _good_predicate(slo.sli_type, slo.latency_threshold_ms)
     window_hours = slo.window_days * 24
 
-    good, total = _counts(good_pred, slo.service, window_hours)
+    good, total = _counts(good_pred, slo.target_kind, slo.service, slo.target_ref, window_hours)
 
     result: dict = {
         "total_events": total,
@@ -116,7 +145,7 @@ def evaluate_slo(slo) -> dict:
     # Burn rate: recent bad fraction vs the sustainable (budget) bad fraction.
     burn_rate: float | None = None
     if allowed_bad_frac > 0:
-        rgood, rtotal = _counts(good_pred, slo.service, _BURN_WINDOW_HOURS)
+        rgood, rtotal = _counts(good_pred, slo.target_kind, slo.service, slo.target_ref, _BURN_WINDOW_HOURS)
         if rtotal > 0:
             recent_bad_frac = (rtotal - rgood) / rtotal
             burn_rate = recent_bad_frac / allowed_bad_frac
