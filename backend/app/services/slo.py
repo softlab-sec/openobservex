@@ -81,31 +81,61 @@ def _counts(
         time_clause = "Timestamp >= now() - INTERVAL {hrs:Float64} HOUR"
         params["hrs"] = since_hours
 
-    if target_kind in ("api", "endpoint"):
+    # Measurement unit per target kind (canonical OpenObserveX SLI semantics):
+    #   api      -> entry-point request: ROOT spans of the route, counted per span.
+    #   service  -> the service's participation in a request: ALL spans of the
+    #               service, counted per DISTINCT TRACE (a trace is bad if the
+    #               service errored anywhere in it). No root filter.
+    #   endpoint -> a single operation (root or child, may repeat in a trace):
+    #               matching spans, per DISTINCT TRACE, same trace-bad rule.
+    #   infrastructure -> metric-native; NOT evaluable on traces. Fail closed
+    #               here until a metrics-based SLI path exists (see roadmap).
+    if target_kind == "api":
         if not (service and target_ref):
             return 0, 0
         clauses.append("ServiceName = {svc:String}")
         clauses.append("SpanName = {ref:String}")
         params["svc"] = service
         params["ref"] = target_ref
-    elif target_kind == "infrastructure":
-        if not target_ref:
+        trace_level = False  # root request semantics
+    elif target_kind == "endpoint":
+        if not (service and target_ref):
             return 0, 0
-        clauses.append("ResourceAttributes['service.instance.id'] = {ref:String}")
+        clauses.append("ServiceName = {svc:String}")
+        clauses.append("SpanName = {ref:String}")
+        params["svc"] = service
         params["ref"] = target_ref
-    else:  # service (or any default): scope to the owning service if named
-        if service:
-            clauses.append("ServiceName = {svc:String}")
-            params["svc"] = service
+        trace_level = True
+    elif target_kind == "infrastructure":
+        # infra targets are discovered from metrics (node_*), not traces; the
+        # trace table cannot measure them. Fail closed rather than report a
+        # misleading zero-as-if-evaluated. Metrics-based infra SLIs: roadmap.
+        return 0, 0
+    else:  # service (or default)
+        if not service:
+            return 0, 0
+        clauses.append("ServiceName = {svc:String}")
+        params["svc"] = service
+        trace_level = True
 
     scope_clause = ("AND " + " AND ".join(clauses)) if clauses else ""
+    if trace_level:
+        # A trace is BAD if the scope has ANY erroring span in it; GOOD otherwise.
+        # good = distinct traces - distinct traces containing a bad span.
+        # No root filter: service/operation spans are downstream (child) spans.
+        root_clause = ""
+        total_expr = "uniq(TraceId)"
+        bad_expr = f"uniqIf(TraceId, NOT ({good_pred}))"
+        select_expr = f"{total_expr} - {bad_expr} AS good, {total_expr} AS total"
+    else:
+        # api: entry-point requests = root spans, counted per span.
+        root_clause = "AND ParentSpanId = ''"
+        select_expr = f"countIf({good_pred}) AS good, count() AS total"
     sql = f"""
-        SELECT
-            countIf({good_pred}) AS good,
-            count() AS total
+        SELECT {select_expr}
         FROM otel_traces
         WHERE {time_clause}
-          AND ParentSpanId = ''
+          {root_clause}
           {scope_clause}
     """
     rows = ch_query(sql, params).result_rows
