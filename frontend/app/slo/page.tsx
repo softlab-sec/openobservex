@@ -10,17 +10,38 @@ import {
   type SloInput,
   type SloInventory,
 } from "@/lib/api";
+import {
+  PERIODS,
+  metricByKey,
+  metricBySliType,
+  metricsForType,
+  unitByKey,
+  periodKeyForDays,
+  resolveWindow,
+  fmtDate,
+  round2,
+  type EngineSliType,
+  type MetricDef,
+  type TargetKind,
+} from "@/lib/slo-config";
 
 const inputCls =
   "w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none focus:border-white/40";
+const fixedCls =
+  "flex items-center rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white/70";
 const labelCls = "mb-1 block text-xs font-medium text-white/50";
+const req = <span className="text-red-400">*</span>;
 
-type TargetKind = "service" | "api" | "endpoint" | "infrastructure";
 const KINDS: { key: TargetKind; label: string }[] = [
   { key: "service", label: "Service" },
   { key: "api", label: "API" },
   { key: "endpoint", label: "Endpoint" },
   { key: "infrastructure", label: "Infrastructure" },
+];
+
+const TYPES: { key: EngineSliType; label: string; icon: string; hint: string }[] = [
+  { key: "availability", label: "Availability", icon: "▦", hint: "Success rate" },
+  { key: "latency", label: "Performance", icon: "⚙", hint: "Fast-enough rate" },
 ];
 
 function budgetColor(pct: number | null): string {
@@ -30,7 +51,6 @@ function budgetColor(pct: number | null): string {
   return "bg-emerald-500";
 }
 
-// The target IS the identity of an SLO. Render it consistently everywhere.
 function targetLine(slo: Slo): string {
   const kind = slo.target_kind;
   if (kind === "infrastructure") return `infrastructure · ${slo.target_ref ?? "unknown"}`;
@@ -44,7 +64,135 @@ function sliLabel(slo: Slo): string {
     : "Availability";
 }
 
-// Overflow action menu. Floats above sibling cards; closes on outside-click / Escape.
+function ValidationMessage({ msg }: { msg?: string | null }) {
+  if (!msg) return null;
+  return <p className="mt-1 text-xs text-red-300/80">{msg}</p>;
+}
+
+// Shared, data-driven condition row. Both SLO types render through this; the
+// metric's registry config decides source visibility, metric options, unit
+// options, and whether a duration threshold applies. The operator is fixed per
+// metric for now (editable operators are a later phase).
+function ConditionRow({
+  metric,
+  metricOptions,
+  onMetric,
+  thresholdValue,
+  onThreshold,
+  unitKey,
+  onUnit,
+  availabilityValue,
+  onAvailabilityValue,
+  thresholdErr,
+  availabilityErr,
+  onTouchThreshold,
+  onTouchAvailability,
+}: {
+  metric: MetricDef;
+  metricOptions: MetricDef[];
+  onMetric: (key: string) => void;
+  thresholdValue: number | null;
+  onThreshold: (v: number | null) => void;
+  unitKey: string;
+  onUnit: (k: string) => void;
+  availabilityValue: number;
+  onAvailabilityValue: (v: number) => void;
+  thresholdErr?: string;
+  availabilityErr?: string;
+  onTouchThreshold: () => void;
+  onTouchAvailability: () => void;
+}) {
+  const isThreshold = metric.hasThreshold;
+  const selectableMetric = metricOptions.length > 1;
+
+  return (
+    <div className="rounded-lg border border-white/10 bg-black/20 p-4">
+      {metric.source && (
+        <div className="mb-3 flex items-center gap-2 text-xs text-white/40">
+          <span>Source:</span>
+          <span className="rounded-lg border border-white/10 bg-black/20 px-2.5 py-1 text-white/70">
+            {metric.source}
+          </span>
+        </div>
+      )}
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="sm:col-span-2">
+          <label className={labelCls}>Metric {req}</label>
+          {selectableMetric ? (
+            <select value={metric.key} onChange={(e) => onMetric(e.target.value)} className={inputCls}>
+              {metricOptions.map((m) => (
+                <option key={m.key} value={m.key}>{m.label}</option>
+              ))}
+            </select>
+          ) : (
+            <div className={fixedCls}>{metric.label}</div>
+          )}
+        </div>
+
+
+        <div>
+          <label className={labelCls}>Value {req}</label>
+          {isThreshold ? (
+            <div className="flex gap-2">
+              <input
+                type="number"
+                min="1"
+                value={thresholdValue ?? ""}
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value);
+                  onThreshold(Number.isFinite(v) ? v : null);
+                }}
+                onBlur={onTouchThreshold}
+                placeholder="500"
+                className={inputCls}
+              />
+              {metric.units.length > 1 ? (
+                <select
+                  value={unitKey}
+                  onChange={(e) => onUnit(e.target.value)}
+                  className="rounded-lg border border-white/10 bg-black/30 px-2 py-2 text-sm outline-none focus:border-white/40"
+                >
+                  {metric.units.map((u) => (
+                    <option key={u.key} value={u.key}>{u.label}</option>
+                  ))}
+                </select>
+              ) : (
+                <div className="flex items-center rounded-lg border border-white/10 bg-black/20 px-3 text-sm text-white/50">
+                  {metric.units[0].label}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                max="100"
+                value={Number.isFinite(availabilityValue) ? availabilityValue : ""}
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value);
+                  onAvailabilityValue(Number.isFinite(v) ? round2(v) : NaN);
+                }}
+                onBlur={onTouchAvailability}
+                placeholder="99.9"
+                className={inputCls}
+              />
+              <div className="flex items-center rounded-lg border border-white/10 bg-black/20 px-3 text-sm text-white/50">
+                {metric.units[0].label}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <ValidationMessage msg={isThreshold ? thresholdErr : availabilityErr} />
+      <p className="mt-3 text-xs text-white/30">{metric.description}</p>
+    </div>
+  );
+}
+
 function CardMenu({
   slo,
   role,
@@ -271,14 +419,15 @@ type FormState = {
   target_ref: string;
   host: string;
   name: string;
-  sli_type: "availability" | "latency";
-  target: number;
-  window_days: number;
-  latency_threshold_ms: number | null;
+  description: string;
+  metricKey: string;
+  thresholdValue: number | null;
+  unitKey: string;
+  targetPct: number;
+  periodDays: number;
   owner: string;
   team: string;
   tags: string;
-  description: string;
 };
 
 const EMPTY_FORM: FormState = {
@@ -287,21 +436,20 @@ const EMPTY_FORM: FormState = {
   target_ref: "",
   host: "",
   name: "",
-  sli_type: "availability",
-  target: 99.9,
-  window_days: 30,
-  latency_threshold_ms: null,
+  description: "",
+  metricKey: "availability",
+  thresholdValue: null,
+  unitKey: "pct",
+  targetPct: 99.9,
+  periodDays: 30,
   owner: "",
   team: "",
   tags: "",
-  description: "",
 };
 
 export default function SloPage() {
   const ctxRole = useRole();
   const [meRole, setMeRole] = useState<string | undefined>(undefined);
-  // The shared role context can be undefined if Shell's /me hasn't resolved for
-  // this view; fetch it directly so action gating is reliable on this page.
   useEffect(() => {
     if (ctxRole) { setMeRole(ctxRole); return; }
     apiGet<{ role?: string }>("/api/v1/auth/me")
@@ -315,6 +463,8 @@ export default function SloPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [attempted, setAttempted] = useState(false);
 
   const [inventory, setInventory] = useState<SloInventory | null>(null);
   const [invErr, setInvErr] = useState<string | null>(null);
@@ -342,6 +492,8 @@ export default function SloPage() {
 
   function resetForm() {
     setForm(EMPTY_FORM);
+    setTouched({});
+    setAttempted(false);
   }
   function closeForm() {
     setShowForm(false);
@@ -353,28 +505,34 @@ export default function SloPage() {
     resetForm();
     setShowForm(true);
   }
+  function markTouched(field: string) {
+    setTouched((t) => ({ ...t, [field]: true }));
+  }
   function startEdit(slo: Slo) {
     const kind = (slo.target_kind ?? "service") as TargetKind;
+    const metric = metricBySliType(slo.sli_type);
     setForm({
       target_kind: kind,
       service: slo.service ?? "",
       target_ref: kind === "service" ? "" : (slo.target_ref ?? ""),
       host: kind === "infrastructure" ? (slo.target_ref ?? "") : "",
       name: slo.name,
-      sli_type: slo.sli_type,
-      target: slo.target,
-      window_days: slo.window_days,
-      latency_threshold_ms: slo.latency_threshold_ms ?? null,
+      description: slo.description ?? "",
+      metricKey: metric.key,
+      thresholdValue: metric.hasThreshold ? (slo.latency_threshold_ms ?? metric.defaultThreshold) : null,
+      unitKey: metric.defaultUnit,
+      targetPct: slo.target,
+      periodDays: slo.window_days,
       owner: slo.owner ?? "",
       team: slo.team ?? "",
       tags: slo.tags ?? "",
-      description: slo.description ?? "",
     });
+    setTouched({});
+    setAttempted(false);
     setEditingId(slo.id);
     setShowForm(true);
   }
 
-  // Escape closes the modal.
   useEffect(() => {
     if (!showForm) return;
     function onKey(e: KeyboardEvent) {
@@ -393,32 +551,85 @@ export default function SloPage() {
       .map((e) => e.endpoint);
   }, [inventory, form.service]);
 
+  const metric = metricByKey(form.metricKey);
+  const isLatency = metric.sliType === "latency";
+  const unit = unitByKey(metric, form.unitKey);
+
+  // Target kinds are constrained by what the selected metric can measure.
+  const availableKinds = useMemo(
+    () => KINDS.filter((k) => metric.targetKinds.includes(k.key)),
+    [metric]
+  );
+
   function setKind(kind: TargetKind) {
     setForm((f) => ({ ...f, target_kind: kind, service: "", target_ref: "", host: "" }));
   }
   function setService(svc: string) {
     setForm((f) => ({ ...f, service: svc, target_ref: "" }));
   }
+  function setType(t: EngineSliType) {
+    const m = metricBySliType(t);
+    setForm((f) => {
+      // If the current target kind is not valid for the new metric, reset it.
+      const kindOk = m.targetKinds.includes(f.target_kind);
+      const kindReset = kindOk
+        ? {}
+        : { target_kind: m.targetKinds[0], service: "", target_ref: "", host: "" };
+      return {
+        ...f,
+        metricKey: m.key,
+        unitKey: m.defaultUnit,
+        thresholdValue: m.hasThreshold ? (f.thresholdValue ?? m.defaultThreshold) : null,
+        ...kindReset,
+      };
+    });
+  }
+  function setMetric(key: string) {
+    const m = metricByKey(key);
+    setForm((f) => {
+      const kindOk = m.targetKinds.includes(f.target_kind);
+      const kindReset = kindOk
+        ? {}
+        : { target_kind: m.targetKinds[0], service: "", target_ref: "", host: "" };
+      return {
+        ...f,
+        metricKey: m.key,
+        unitKey: m.defaultUnit,
+        thresholdValue: m.hasThreshold ? (f.thresholdValue ?? m.defaultThreshold) : null,
+        ...kindReset,
+      };
+    });
+  }
 
   const resolvedTarget = useMemo(() => {
     const k = form.target_kind;
-    if (k === "service") return form.service ? `service · ${form.service}` : null;
-    if (k === "infrastructure") return form.host ? `infrastructure · ${form.host}` : null;
-    if (form.service && form.target_ref) return `${k} · ${form.target_ref} on ${form.service}`;
+    if (k === "service") return form.service ? `Service: ${form.service}` : null;
+    if (k === "infrastructure") return form.host ? `Infrastructure: ${form.host}` : null;
+    if (form.service && form.target_ref)
+      return `${k === "api" ? "API" : "Endpoint"}: ${form.target_ref} on ${form.service}`;
     return null;
   }, [form.target_kind, form.service, form.target_ref, form.host]);
 
-  const targetValid = resolvedTarget !== null;
-  const latencyValid =
-    form.sli_type !== "latency" || (form.latency_threshold_ms != null && form.latency_threshold_ms > 0);
-  const canSubmit =
-    form.name.trim().length > 0 &&
-    targetValid &&
-    latencyValid &&
-    form.target >= 0 &&
-    form.target <= 100;
+  const window = useMemo(() => resolveWindow(form.periodDays), [form.periodDays]);
+
+  const errors: Record<string, string> = {};
+  if (!form.name.trim()) errors.name = "SLO name is required";
+  if (resolvedTarget === null) errors.target = "Select a target to continue";
+  if (isLatency) {
+    if (!(Number.isFinite(form.thresholdValue ?? NaN) && (form.thresholdValue ?? 0) > 0))
+      errors.threshold = "Enter a threshold greater than 0";
+  }
+  if (!(Number.isFinite(form.targetPct) && form.targetPct > 0 && form.targetPct <= 100))
+    errors.targetPct = "Enter a value greater than 0 and at most 100";
+  const canSubmit = Object.keys(errors).length === 0;
+
+  function showErr(field: string): string | undefined {
+    return (attempted || touched[field]) ? errors[field] : undefined;
+  }
 
   async function submit() {
+    setAttempted(true);
+    if (!canSubmit) return;
     setErr(null);
     try {
       const k = form.target_kind;
@@ -430,19 +641,24 @@ export default function SloPage() {
             ? form.service.trim()
             : form.target_ref.trim();
 
+      const latency_threshold_ms =
+        isLatency && metric.hasThreshold && form.thresholdValue != null
+          ? Math.round(unit.toMs ? unit.toMs(form.thresholdValue) : form.thresholdValue)
+          : null;
+
       const payload: SloInput = {
         name: form.name.trim(),
         description: form.description.trim() || null,
         owner: form.owner.trim() || null,
         team: form.team.trim() || null,
         tags: form.tags.trim() || null,
-        sli_type: form.sli_type,
+        sli_type: metric.sliType,
         target_kind: k,
         service,
         target_ref: target_ref || null,
-        target: form.target,
-        window_days: form.window_days,
-        latency_threshold_ms: form.sli_type === "latency" ? form.latency_threshold_ms : null,
+        target: round2(form.targetPct),
+        window_days: form.periodDays,
+        latency_threshold_ms,
       };
 
       if (editingId) {
@@ -467,7 +683,6 @@ export default function SloPage() {
       setErr((e as Error).message);
     }
   }
-
   async function clone(id: string) {
     try {
       await apiSend<Slo>(`/api/v1/slos/${id}/clone`, "POST");
@@ -476,7 +691,6 @@ export default function SloPage() {
       setErr((e as Error).message);
     }
   }
-
   async function toggle(slo: Slo) {
     if (slo.enabled && !confirm(`Disable "${slo.name}"? It will stop being evaluated.`)) return;
     try {
@@ -486,7 +700,6 @@ export default function SloPage() {
       setErr((e as Error).message);
     }
   }
-
   async function remove(id: string) {
     if (!confirm("Delete this SLO? This cannot be undone.")) return;
     try {
@@ -499,6 +712,9 @@ export default function SloPage() {
 
   const showServicePicker = form.target_kind !== "infrastructure";
   const showEndpointPicker = form.target_kind === "api" || form.target_kind === "endpoint";
+  const conditionStr = isLatency
+    ? `${Number.isFinite(form.targetPct) ? form.targetPct : "?"}% of requests complete within ${form.thresholdValue ?? "?"} ${unit.label}`
+    : `Target ${metric.label.toLowerCase()} \u2265 ${Number.isFinite(form.targetPct) ? form.targetPct : "?"}%`;
 
   return (
     <Shell>
@@ -530,14 +746,16 @@ export default function SloPage() {
             if (e.target === e.currentTarget) closeForm();
           }}
         >
-          <div className="my-4 w-full max-w-3xl rounded-2xl border border-white/10 bg-[#0e1526] p-6 shadow-2xl shadow-black/50">
+          <div className="my-4 w-full max-w-4xl rounded-2xl border border-white/10 bg-[#0e1526] p-6 shadow-2xl shadow-black/50">
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-lg font-semibold tracking-tight">
                   {editingId ? "Edit SLO" : "Create SLO Profile"}
                 </h2>
                 <p className="text-xs text-white/40">
-                  {editingId ? "Editing an existing SLO" : "Define a reliability target on a service, API, endpoint, or host"}
+                  {editingId
+                    ? "Editing an existing SLO"
+                    : "Define a reliability target on a service, API, endpoint, or host"}
                 </p>
               </div>
               <button
@@ -555,213 +773,285 @@ export default function SloPage() {
             ) : !inventory ? (
               <p className="py-6 text-center text-sm text-white/30">Loading inventory...</p>
             ) : (
-              <div className="space-y-6">
-                <section>
-                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-white/40">
-                    1 · Target
-                  </h3>
-                  <div
-                    role="tablist"
-                    aria-label="Target kind"
-                    className="mb-4 inline-flex rounded-lg border border-white/10 bg-black/30 p-1"
-                  >
-                    {KINDS.map((k) => (
+              <div className="flex flex-col gap-6 sm:flex-row">
+                <div className="flex gap-2 sm:w-44 sm:shrink-0 sm:flex-col">
+                  {TYPES.map((t) => {
+                    const active = metric.sliType === t.key;
+                    return (
                       <button
-                        key={k.key}
-                        role="tab"
-                        aria-selected={form.target_kind === k.key}
-                        onClick={() => setKind(k.key)}
-                        className={`rounded-md px-3 py-1.5 text-sm transition ${
-                          form.target_kind === k.key
-                            ? "bg-white text-black"
-                            : "text-white/60 hover:text-white"
+                        key={t.key}
+                        onClick={() => setType(t.key)}
+                        className={`flex flex-1 items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition sm:flex-none ${
+                          active
+                            ? "border-white/15 bg-white/10 text-white"
+                            : "border-transparent text-white/50 hover:bg-white/5 hover:text-white"
                         }`}
                       >
-                        {k.label}
+                        <span className="text-base leading-none">{t.icon}</span>
+                        <span className="flex flex-col leading-tight">
+                          <span>{t.label}</span>
+                          <span className="text-[10px] text-white/40">{t.hint}</span>
+                        </span>
                       </button>
-                    ))}
-                  </div>
+                    );
+                  })}
+                </div>
 
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    {showServicePicker && (
-                      <div>
-                        <label className={labelCls}>
-                          {form.target_kind === "service" ? "Service" : "Owning service"}
-                        </label>
-                        <Combobox
-                          options={services}
-                          value={form.service || null}
-                          onChange={setService}
-                          placeholder="Search services..."
-                          label="Owning service"
-                          emptyText="No services in inventory"
-                        />
-                      </div>
-                    )}
-
-                    {showEndpointPicker && (
-                      <div>
-                        <label className={labelCls}>
-                          {form.target_kind === "api" ? "API" : "Endpoint"}
-                        </label>
-                        <Combobox
-                          options={endpointsForService}
-                          value={form.target_ref || null}
-                          onChange={(v) => setForm((f) => ({ ...f, target_ref: v }))}
-                          placeholder={form.service ? "Search endpoints..." : "Select a service first"}
-                          disabled={!form.service}
-                          label={form.target_kind === "api" ? "API" : "Endpoint"}
-                          emptyText="No endpoints for this service"
-                        />
-                      </div>
-                    )}
-
-                    {form.target_kind === "infrastructure" && (
-                      <div>
-                        <label className={labelCls}>Host / component</label>
-                        <Combobox
-                          options={hosts}
-                          value={form.host || null}
-                          onChange={(v) => setForm((f) => ({ ...f, host: v }))}
-                          placeholder="Search infrastructure..."
-                          label="Host or component"
-                          emptyText="No infrastructure in inventory"
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="mt-3 text-xs">
-                    <span className="text-white/40">Resolved target: </span>
-                    {resolvedTarget ? (
-                      <span className="font-mono text-sky-300/80">{resolvedTarget}</span>
-                    ) : (
-                      <span className="text-white/30">incomplete</span>
-                    )}
-                  </div>
-                </section>
-
-                <section>
-                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-white/40">
-                    2 · Objective
-                  </h3>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="sm:col-span-2">
-                      <label className={labelCls}>Name</label>
-                      <input
-                        value={form.name}
-                        onChange={(e) => setForm({ ...form, name: e.target.value })}
-                        placeholder="Checkout availability"
-                        className={inputCls}
-                      />
-                    </div>
-                    <div>
-                      <label className={labelCls}>SLI type</label>
-                      <select
-                        value={form.sli_type}
-                        onChange={(e) =>
-                          setForm({ ...form, sli_type: e.target.value as "availability" | "latency" })
-                        }
-                        className={inputCls}
-                      >
-                        <option value="availability">Availability (success rate)</option>
-                        <option value="latency">Latency (fast-enough rate)</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className={labelCls}>Target %</label>
-                      <input
-                        type="number"
-                        step="0.001"
-                        value={form.target}
-                        onChange={(e) => setForm({ ...form, target: parseFloat(e.target.value) })}
-                        className={inputCls}
-                      />
-                    </div>
-                    <div>
-                      <label className={labelCls}>Window (days)</label>
-                      <input
-                        type="number"
-                        value={form.window_days}
-                        onChange={(e) =>
-                          setForm({ ...form, window_days: parseInt(e.target.value, 10) })
-                        }
-                        className={inputCls}
-                      />
-                    </div>
-                    {form.sli_type === "latency" && (
-                      <div>
-                        <label className={labelCls}>Latency threshold (ms)</label>
+                <div className="min-w-0 flex-1 space-y-6">
+                  <section>
+                    <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-white/40">
+                      1 · Basic information
+                    </h3>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="sm:col-span-2">
+                        <label className={labelCls}>SLO name {req}</label>
                         <input
-                          type="number"
-                          value={form.latency_threshold_ms ?? ""}
-                          onChange={(e) =>
-                            setForm({ ...form, latency_threshold_ms: parseFloat(e.target.value) })
-                          }
-                          placeholder="500"
+                          value={form.name}
+                          onChange={(e) => setForm({ ...form, name: e.target.value })}
+                          onBlur={() => markTouched("name")}
+                          placeholder="Checkout availability"
+                          className={inputCls}
+                        />
+                        <ValidationMessage msg={showErr("name")} />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className={labelCls}>SLO description</label>
+                        <input
+                          value={form.description}
+                          onChange={(e) => setForm({ ...form, description: e.target.value })}
+                          placeholder="Optional context"
                           className={inputCls}
                         />
                       </div>
-                    )}
-                  </div>
-                </section>
+                    </div>
+                  </section>
 
-                <section>
-                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-white/40">
-                    3 · Ownership
-                  </h3>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <label className={labelCls}>Owner</label>
-                      <input
-                        value={form.owner}
-                        onChange={(e) => setForm({ ...form, owner: e.target.value })}
-                        placeholder="Platform Team"
-                        className={inputCls}
-                      />
+                  <section>
+                    <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-white/40">
+                      2 · Target {req}
+                    </h3>
+                    <div
+                      role="tablist"
+                      aria-label="Target kind"
+                      className="mb-4 inline-flex rounded-lg border border-white/10 bg-black/30 p-1"
+                    >
+                      {availableKinds.map((k) => (
+                        <button
+                          key={k.key}
+                          role="tab"
+                          aria-selected={form.target_kind === k.key}
+                          onClick={() => setKind(k.key)}
+                          className={`rounded-md px-3 py-1.5 text-sm transition ${
+                            form.target_kind === k.key
+                              ? "bg-white text-black"
+                              : "text-white/60 hover:text-white"
+                          }`}
+                        >
+                          {k.label}
+                        </button>
+                      ))}
                     </div>
-                    <div>
-                      <label className={labelCls}>Team</label>
-                      <input
-                        value={form.team}
-                        onChange={(e) => setForm({ ...form, team: e.target.value })}
-                        placeholder="Payments"
-                        className={inputCls}
-                      />
-                    </div>
-                    <div>
-                      <label className={labelCls}>Tags (comma-separated)</label>
-                      <input
-                        value={form.tags}
-                        onChange={(e) => setForm({ ...form, tags: e.target.value })}
-                        placeholder="tier1, critical"
-                        className={inputCls}
-                      />
-                    </div>
-                    <div>
-                      <label className={labelCls}>Description</label>
-                      <input
-                        value={form.description}
-                        onChange={(e) => setForm({ ...form, description: e.target.value })}
-                        placeholder="Optional context"
-                        className={inputCls}
-                      />
-                    </div>
-                  </div>
-                </section>
 
-                <div className="rounded-lg border border-white/10 bg-black/20 p-4 text-sm">
-                  <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-white/40">
-                    Summary
-                  </div>
-                  {canSubmit ? (
-                    <div className="space-y-0.5">
-                      <div>
-                        {form.target}% {form.sli_type}
-                        {form.sli_type === "latency" ? ` under ${form.latency_threshold_ms}ms` : ""} over{" "}
-                        {form.window_days} days
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      {showServicePicker && (
+                        <div>
+                          <label className={labelCls}>
+                            {form.target_kind === "service" ? "Business service" : "Owning service"} {req}
+                          </label>
+                          <Combobox
+                            options={services}
+                            value={form.service || null}
+                            onChange={setService}
+                            placeholder="Search services..."
+                            label="Owning service"
+                            emptyText="No services in inventory"
+                          />
+                        </div>
+                      )}
+                      {showEndpointPicker && (
+                        <div>
+                          <label className={labelCls}>
+                            {form.target_kind === "api" ? "API" : "Endpoint"} {req}
+                          </label>
+                          <Combobox
+                            options={endpointsForService}
+                            value={form.target_ref || null}
+                            onChange={(v) => setForm((f) => ({ ...f, target_ref: v }))}
+                            placeholder={form.service ? "Search endpoints..." : "Select a service first"}
+                            disabled={!form.service}
+                            label={form.target_kind === "api" ? "API" : "Endpoint"}
+                            emptyText="No endpoints for this service"
+                          />
+                        </div>
+                      )}
+                      {form.target_kind === "infrastructure" && (
+                        <div>
+                          <label className={labelCls}>Host / component {req}</label>
+                          <Combobox
+                            options={hosts}
+                            value={form.host || null}
+                            onChange={(v) => setForm((f) => ({ ...f, host: v }))}
+                            placeholder="Search infrastructure..."
+                            label="Host or component"
+                            emptyText="No infrastructure in inventory"
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="mt-3">
+                      {resolvedTarget ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-300">
+                          <span>✓</span>
+                          <span className="font-mono">{resolvedTarget}</span>
+                        </span>
+                      ) : (
+                        <span className="text-xs text-white/30">Select a target to continue</span>
+                      )}
+                      <ValidationMessage msg={showErr("target")} />
+                    </div>
+                  </section>
+
+                  <section>
+                    <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-white/40">
+                      3 · SLO condition {req}
+                    </h3>
+                    <ConditionRow
+                      metric={metric}
+                      metricOptions={metricsForType(metric.sliType)}
+                      onMetric={setMetric}
+                      thresholdValue={form.thresholdValue}
+                      onThreshold={(v) => setForm({ ...form, thresholdValue: v })}
+                      unitKey={form.unitKey}
+                      onUnit={(k) => setForm({ ...form, unitKey: k })}
+                      availabilityValue={form.targetPct}
+                      onAvailabilityValue={(v) => setForm({ ...form, targetPct: v })}
+                      thresholdErr={showErr("threshold")}
+                      availabilityErr={showErr("targetPct")}
+                      onTouchThreshold={() => markTouched("threshold")}
+                      onTouchAvailability={() => markTouched("targetPct")}
+                    />
+
+                    {isLatency && (
+                      <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-4">
+                        <label className={labelCls}>Objective {req}</label>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm text-white/50">At least</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max="100"
+                            value={Number.isFinite(form.targetPct) ? form.targetPct : ""}
+                            onChange={(e) => {
+                              const v = parseFloat(e.target.value);
+                              setForm({ ...form, targetPct: Number.isFinite(v) ? round2(v) : NaN });
+                            }}
+                            onBlur={() => markTouched("targetPct")}
+                            className="w-28 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none focus:border-white/40"
+                          />
+                          <span className="text-sm text-white/50">
+                            % of requests must complete within {form.thresholdValue ?? "?"} {unit.label} over the period
+                          </span>
+                        </div>
+                        <ValidationMessage msg={showErr("targetPct")} />
                       </div>
-                      <div className="font-mono text-sky-300/80">{resolvedTarget}</div>
+                    )}
+                  </section>
+
+                  <section>
+                    <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-white/40">
+                      4 · Evaluation period {req}
+                    </h3>
+                    <div className="mb-3 flex flex-wrap gap-2">
+                      {PERIODS.map((p) => {
+                        const active = form.periodDays === p.days;
+                        return (
+                          <button
+                            key={p.key}
+                            onClick={() => setForm({ ...form, periodDays: p.days })}
+                            className={`rounded-lg border px-3 py-1.5 text-sm transition ${
+                              active
+                                ? "border-white/15 bg-white/10 text-white"
+                                : "border-white/10 text-white/60 hover:bg-white/5 hover:text-white"
+                            }`}
+                          >
+                            {p.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="rounded-lg border border-white/10 bg-black/20 p-3 text-sm">
+                      <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
+                        <span className="text-white/40">
+                          Resolved range:{" "}
+                          <span className="font-mono text-sky-300/80">
+                            {fmtDate(window.start)} → {fmtDate(window.end)}
+                          </span>
+                        </span>
+                        <span className="text-white/40">
+                          Duration: <span className="text-white/70">{window.days} days</span>
+                        </span>
+                      </div>
+                      {periodKeyForDays(form.periodDays) === null && (
+                        <p className="mt-1 text-xs text-white/30">
+                          Existing window of {form.periodDays} days, evaluated as a rolling window ending now.
+                        </p>
+                      )}
+                    </div>
+                  </section>
+
+                  <section>
+                    <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-white/40">
+                      5 · Ownership
+                    </h3>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <label className={labelCls}>Owner</label>
+                        <input
+                          value={form.owner}
+                          onChange={(e) => setForm({ ...form, owner: e.target.value })}
+                          placeholder="Platform Team"
+                          className={inputCls}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Team</label>
+                        <input
+                          value={form.team}
+                          onChange={(e) => setForm({ ...form, team: e.target.value })}
+                          placeholder="Payments"
+                          className={inputCls}
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className={labelCls}>Tags (comma-separated)</label>
+                        <input
+                          value={form.tags}
+                          onChange={(e) => setForm({ ...form, tags: e.target.value })}
+                          placeholder="tier1, critical"
+                          className={inputCls}
+                        />
+                      </div>
+                    </div>
+                  </section>
+
+                  <div className="rounded-lg border border-white/10 bg-black/20 p-4 text-sm">
+                    <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-white/40">
+                      6 · Summary
+                    </div>
+                    <div className="space-y-1">
+                      <div className="font-medium">{form.name.trim() || "Untitled SLO"}</div>
+                      <div className="font-mono text-sky-300/80">{conditionStr}</div>
+                      {isLatency && (
+                        <div className="text-white/60">
+                          Objective: ≥ {Number.isFinite(form.targetPct) ? form.targetPct : "?"}% of requests
+                        </div>
+                      )}
+                      <div className="text-white/50">{resolvedTarget ?? "Target: incomplete"}</div>
+                      <div className="text-white/50">
+                        Evaluation period: {fmtDate(window.start)} → {fmtDate(window.end)} · {window.days} days
+                      </div>
                       {(form.owner || form.team) && (
                         <div className="text-white/50">
                           {form.owner && `Owner: ${form.owner}`}
@@ -769,28 +1059,28 @@ export default function SloPage() {
                           {form.team && `Team: ${form.team}`}
                         </div>
                       )}
+                      {form.tags.trim() && <div className="text-white/50">Tags: {form.tags.trim()}</div>}
                     </div>
-                  ) : (
-                    <div className="text-white/30">
-                      Complete the target, a name, and a valid objective to continue.
-                    </div>
-                  )}
-                </div>
+                  </div>
 
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={submit}
-                    disabled={!canSubmit}
-                    className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black transition disabled:opacity-40"
-                  >
-                    {editingId ? "Save changes" : "Create SLO"}
-                  </button>
-                  <button
-                    onClick={closeForm}
-                    className="rounded-lg border border-white/10 px-4 py-2 text-sm text-white/60 transition hover:bg-white/5"
-                  >
-                    Cancel
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={submit}
+                      disabled={!canSubmit}
+                      className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black transition disabled:opacity-40"
+                    >
+                      {editingId ? "Save changes" : "Create SLO"}
+                    </button>
+                    <button
+                      onClick={closeForm}
+                      className="rounded-lg border border-white/10 px-4 py-2 text-sm text-white/60 transition hover:bg-white/5"
+                    >
+                      Cancel
+                    </button>
+                    {!canSubmit && attempted && (
+                      <span className="text-xs text-red-300/70">Resolve the highlighted fields to continue</span>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
