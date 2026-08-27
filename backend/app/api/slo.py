@@ -1,6 +1,6 @@
 """Service Level Objectives API (org-scoped, auth-required)."""
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -67,10 +67,28 @@ def slo_inventory(user: User = Depends(get_current_user)):
         """,
         {"h": _INVENTORY_WINDOW_HOURS},
     ))
+    # Earliest date a custom range may start: the later of the TTL boundary and
+    # the oldest trace actually present, so the picker never offers an empty range.
+    ttl_floor = datetime.now(timezone.utc) - timedelta(days=RETENTION_DAYS)
+    oldest_rows = _ch_rows(ch_query(
+        "SELECT min(Timestamp) AS oldest FROM otel_traces"
+    ))
+    earliest = ttl_floor
+    if oldest_rows and oldest_rows[0].get("oldest"):
+        oldest = oldest_rows[0]["oldest"]
+        if oldest.tzinfo is None:
+            oldest = oldest.replace(tzinfo=timezone.utc)
+        if oldest > ttl_floor:
+            earliest = oldest
     return {
         "services": [r["service"] for r in services],
         "endpoints": endpoints,
         "infrastructure": [r["host"] for r in infrastructure],
+        "retention": {
+            "days": RETENTION_DAYS,
+            "earliest": earliest.isoformat(),
+            "latest": datetime.now(timezone.utc).isoformat(),
+        },
     }
 
 
@@ -86,6 +104,8 @@ class SLOIn(BaseModel):
     target_ref: str | None = Field(default=None, max_length=255)
     target: float = Field(ge=0, le=100)
     window_days: int = Field(default=30, ge=1, le=365)
+    window_start: datetime | None = None
+    window_end: datetime | None = None
     latency_threshold_ms: float | None = None
     enabled: bool = True
 
@@ -102,6 +122,8 @@ class SLOUpdate(BaseModel):
     target_ref: str | None = Field(default=None, max_length=255)
     target: float | None = Field(default=None, ge=0, le=100)
     window_days: int | None = Field(default=None, ge=1, le=365)
+    window_start: datetime | None = None
+    window_end: datetime | None = None
     latency_threshold_ms: float | None = None
     enabled: bool | None = None
 
@@ -119,6 +141,8 @@ class SLOOut(BaseModel):
     target_ref: str | None
     target: float
     window_days: int
+    window_start: datetime | None
+    window_end: datetime | None
     latency_threshold_ms: float | None
     enabled: bool
     current_sli: float | None
@@ -137,6 +161,35 @@ class SLOOut(BaseModel):
 # (a SpanName on a service); the distinction is preserved for the future
 # curated service registry but treated identically at query time for now.
 TARGET_KINDS = {"service", "api", "endpoint", "infrastructure"}
+
+# ClickHouse otel_traces TTL is 3 days (toIntervalDay(3)); a custom evaluation
+# range cannot start earlier than that, or it would query data already dropped.
+RETENTION_DAYS = 3
+
+
+def _validate_range(window_start, window_end) -> None:
+    """Reject a custom absolute range the engine cannot honor. Both-or-neither;
+    start<end; end not in the future; start within telemetry retention."""
+    if window_start is None and window_end is None:
+        return  # rolling window, nothing to validate
+    if (window_start is None) != (window_end is None):
+        raise HTTPException(
+            status_code=400,
+            detail="a custom range needs both a start and an end (or neither)",
+        )
+    if window_start >= window_end:
+        raise HTTPException(status_code=400, detail="range start must be before its end")
+    now = datetime.now(timezone.utc)
+    # normalise to aware for comparison (inputs may arrive naive-UTC)
+    ws = window_start if window_start.tzinfo else window_start.replace(tzinfo=timezone.utc)
+    we = window_end if window_end.tzinfo else window_end.replace(tzinfo=timezone.utc)
+    if we > now + timedelta(minutes=5):
+        raise HTTPException(status_code=400, detail="range end cannot be in the future")
+    if ws < now - timedelta(days=RETENTION_DAYS):
+        raise HTTPException(
+            status_code=400,
+            detail=f"range start is older than the {RETENTION_DAYS}-day telemetry retention window",
+        )
 
 
 def _validate(
@@ -195,6 +248,7 @@ def create_slo(
     if body.target_kind == "service" and not (target_ref and target_ref.strip()):
         target_ref = body.service
     _validate(body.sli_type, body.latency_threshold_ms, body.target_kind, body.service, target_ref)
+    _validate_range(body.window_start, body.window_end)
     slo = SLO(
         organization_id=user.organization_id,
         name=body.name,
@@ -208,6 +262,8 @@ def create_slo(
         target_ref=target_ref or None,
         target=body.target,
         window_days=body.window_days,
+        window_start=body.window_start,
+        window_end=body.window_end,
         latency_threshold_ms=body.latency_threshold_ms,
         enabled=body.enabled,
     )
@@ -250,7 +306,8 @@ def update_slo(
     fields = [
         "name", "description", "owner", "team", "tags",
         "sli_type", "target_kind", "service", "target_ref",
-        "target", "window_days", "latency_threshold_ms", "enabled",
+        "target", "window_days", "window_start", "window_end",
+        "latency_threshold_ms", "enabled",
     ]
     before, after = {}, {}
     data = body.model_dump(exclude_unset=True)
@@ -260,6 +317,7 @@ def update_slo(
             setattr(slo, f, data[f])
             after[f] = data[f]
     _validate(slo.sli_type, slo.latency_threshold_ms, slo.target_kind, slo.service, slo.target_ref)
+    _validate_range(slo.window_start, slo.window_end)
     # a definition change invalidates the cached status until re-evaluated
     if after:
         slo.current_sli = None

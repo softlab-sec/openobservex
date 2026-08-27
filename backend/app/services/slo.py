@@ -58,6 +58,8 @@ def _counts(
     service: str | None,
     target_ref: str | None,
     since_hours: float,
+    start: datetime | None = None,
+    end: datetime | None = None,
 ) -> tuple[int, int]:
     """Return (good, total) over the last `since_hours` hours, scoped to the
     SLO's actual target. Scope by target_kind:
@@ -67,8 +69,17 @@ def _counts(
     A missing ref for api/endpoint/infra would silently widen scope, so we
     fail closed to zero rather than report a wrong (parent-scoped) SLI.
     """
-    params: dict = {"hrs": since_hours}
+    params: dict = {}
     clauses: list[str] = []
+
+    # time bound: absolute [start, end) when both given, else rolling last-N-hours
+    if start is not None and end is not None:
+        time_clause = "Timestamp >= {start:DateTime64(9)} AND Timestamp < {end:DateTime64(9)}"
+        params["start"] = start
+        params["end"] = end
+    else:
+        time_clause = "Timestamp >= now() - INTERVAL {hrs:Float64} HOUR"
+        params["hrs"] = since_hours
 
     if target_kind in ("api", "endpoint"):
         if not (service and target_ref):
@@ -93,7 +104,7 @@ def _counts(
             countIf({good_pred}) AS good,
             count() AS total
         FROM otel_traces
-        WHERE Timestamp >= now() - INTERVAL {{hrs:Float64}} HOUR
+        WHERE {time_clause}
           AND ParentSpanId = ''
           {scope_clause}
     """
@@ -112,7 +123,14 @@ def evaluate_slo(slo) -> dict:
     good_pred = _good_predicate(slo.sli_type, slo.latency_threshold_ms)
     window_hours = slo.window_days * 24
 
-    good, total = _counts(good_pred, slo.target_kind, slo.service, slo.target_ref, window_hours)
+    # absolute range when both bounds are set, otherwise the rolling window
+    abs_start = getattr(slo, "window_start", None)
+    abs_end = getattr(slo, "window_end", None)
+    is_absolute = abs_start is not None and abs_end is not None
+    good, total = _counts(
+        good_pred, slo.target_kind, slo.service, slo.target_ref,
+        window_hours, start=abs_start, end=abs_end,
+    )
 
     result: dict = {
         "total_events": total,
@@ -144,7 +162,7 @@ def evaluate_slo(slo) -> dict:
 
     # Burn rate: recent bad fraction vs the sustainable (budget) bad fraction.
     burn_rate: float | None = None
-    if allowed_bad_frac > 0:
+    if allowed_bad_frac > 0 and not is_absolute:
         rgood, rtotal = _counts(good_pred, slo.target_kind, slo.service, slo.target_ref, _BURN_WINDOW_HOURS)
         if rtotal > 0:
             recent_bad_frac = (rtotal - rgood) / rtotal

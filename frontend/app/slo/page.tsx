@@ -425,11 +425,20 @@ type FormState = {
   unitKey: string;
   targetPct: number;
   periodDays: number;
+  rangeMode: "rolling" | "custom";
+  customStart: string;
+  customEnd: string;
   owner: string;
   team: string;
   tags: string;
 };
 
+// ISO timestamp -> value for a <input type="datetime-local"> (local, no seconds/zone)
+function toLocalInput(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 const EMPTY_FORM: FormState = {
   target_kind: "service",
   service: "",
@@ -442,6 +451,9 @@ const EMPTY_FORM: FormState = {
   unitKey: "pct",
   targetPct: 99.9,
   periodDays: 30,
+  rangeMode: "rolling",
+  customStart: "",
+  customEnd: "",
   owner: "",
   team: "",
   tags: "",
@@ -523,6 +535,9 @@ export default function SloPage() {
       unitKey: metric.defaultUnit,
       targetPct: slo.target,
       periodDays: slo.window_days,
+      rangeMode: slo.window_start && slo.window_end ? "custom" : "rolling",
+      customStart: slo.window_start ? toLocalInput(slo.window_start) : "",
+      customEnd: slo.window_end ? toLocalInput(slo.window_end) : "",
       owner: slo.owner ?? "",
       team: slo.team ?? "",
       tags: slo.tags ?? "",
@@ -611,6 +626,16 @@ export default function SloPage() {
   }, [form.target_kind, form.service, form.target_ref, form.host]);
 
   const window = useMemo(() => resolveWindow(form.periodDays), [form.periodDays]);
+  // datetime-local bounds from the retention floor the backend reported
+  const invMin = inventory?.retention ? toLocalInput(inventory.retention.earliest) : undefined;
+  const invMax = inventory?.retention ? toLocalInput(inventory.retention.latest) : undefined;
+  // client-side custom-range sanity (backend re-validates authoritatively)
+  const customRangeErr = useMemo(() => {
+    if (form.rangeMode !== "custom") return null;
+    if (!form.customStart || !form.customEnd) return "Pick both a start and an end.";
+    if (new Date(form.customStart) >= new Date(form.customEnd)) return "Start must be before end.";
+    return null;
+  }, [form.rangeMode, form.customStart, form.customEnd]);
 
   const errors: Record<string, string> = {};
   if (!form.name.trim()) errors.name = "SLO name is required";
@@ -621,6 +646,12 @@ export default function SloPage() {
   }
   if (!(Number.isFinite(form.targetPct) && form.targetPct > 0 && form.targetPct <= 100))
     errors.targetPct = "Enter a value greater than 0 and at most 100";
+  if (form.rangeMode === "custom") {
+    if (!form.customStart || !form.customEnd)
+      errors.customRange = "Pick both a start and an end for the custom range";
+    else if (new Date(form.customStart) >= new Date(form.customEnd))
+      errors.customRange = "Custom range start must be before its end";
+  }
   const canSubmit = Object.keys(errors).length === 0;
 
   function showErr(field: string): string | undefined {
@@ -658,6 +689,14 @@ export default function SloPage() {
         target_ref: target_ref || null,
         target: round2(form.targetPct),
         window_days: form.periodDays,
+        window_start:
+          form.rangeMode === "custom" && form.customStart
+            ? new Date(form.customStart).toISOString()
+            : null,
+        window_end:
+          form.rangeMode === "custom" && form.customEnd
+            ? new Date(form.customEnd).toISOString()
+            : null,
         latency_threshold_ms,
       };
 
@@ -963,24 +1002,76 @@ export default function SloPage() {
                     <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-white/40">
                       4 · Evaluation period {req}
                     </h3>
-                    <div className="mb-3 flex flex-wrap gap-2">
-                      {PERIODS.map((p) => {
-                        const active = form.periodDays === p.days;
-                        return (
-                          <button
-                            key={p.key}
-                            onClick={() => setForm({ ...form, periodDays: p.days })}
-                            className={`rounded-lg border px-3 py-1.5 text-sm transition ${
-                              active
-                                ? "border-white/15 bg-white/10 text-white"
-                                : "border-white/10 text-white/60 hover:bg-white/5 hover:text-white"
-                            }`}
-                          >
-                            {p.label}
-                          </button>
-                        );
-                      })}
+                    <div className="mb-3 flex gap-2">
+                      {(["rolling", "custom"] as const).map((m) => (
+                        <button
+                          key={m}
+                          onClick={() => setForm({ ...form, rangeMode: m })}
+                          className={`rounded-lg border px-3 py-1.5 text-sm transition ${
+                            form.rangeMode === m
+                              ? "border-white/15 bg-white/10 text-white"
+                              : "border-white/10 text-white/60 hover:bg-white/5 hover:text-white"
+                          }`}
+                        >
+                          {m === "rolling" ? "Rolling window" : "Custom range"}
+                        </button>
+                      ))}
                     </div>
+                    {form.rangeMode === "rolling" ? (
+                      <div className="mb-3 flex flex-wrap gap-2">
+                        {PERIODS.map((p) => {
+                          const active = form.periodDays === p.days;
+                          return (
+                            <button
+                              key={p.key}
+                              onClick={() => setForm({ ...form, periodDays: p.days })}
+                              className={`rounded-lg border px-3 py-1.5 text-sm transition ${
+                                active
+                                  ? "border-white/15 bg-white/10 text-white"
+                                  : "border-white/10 text-white/60 hover:bg-white/5 hover:text-white"
+                              }`}
+                            >
+                              {p.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="mb-3 rounded-lg border border-white/10 bg-black/20 p-3">
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div>
+                            <label className={labelCls}>From</label>
+                            <input
+                              type="datetime-local"
+                              value={form.customStart}
+                              min={invMin}
+                              max={invMax}
+                              onChange={(e) => setForm({ ...form, customStart: e.target.value })}
+                              className={inputCls}
+                            />
+                          </div>
+                          <div>
+                            <label className={labelCls}>To</label>
+                            <input
+                              type="datetime-local"
+                              value={form.customEnd}
+                              min={invMin}
+                              max={invMax}
+                              onChange={(e) => setForm({ ...form, customEnd: e.target.value })}
+                              className={inputCls}
+                            />
+                          </div>
+                        </div>
+                        {inventory?.retention && (
+                          <p className="mt-2 text-xs text-white/30">
+                            Telemetry available from {fmtDate(new Date(inventory.retention.earliest))} (kept {inventory.retention.days} days). Ranges outside this window cannot be evaluated.
+                          </p>
+                        )}
+                        {customRangeErr && (
+                          <p className="mt-2 text-xs text-rose-300/80">{customRangeErr}</p>
+                        )}
+                      </div>
+                    )}
                     <div className="rounded-lg border border-white/10 bg-black/20 p-3 text-sm">
                       <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
                         <span className="text-white/40">

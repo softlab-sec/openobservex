@@ -611,6 +611,8 @@ export type Slo = {
   target_ref: string | null;
   target: number;
   window_days: number;
+  window_start: string | null;
+  window_end: string | null;
   latency_threshold_ms: number | null;
   enabled: boolean;
   current_sli: number | null;
@@ -634,6 +636,8 @@ export type SloInput = {
   target_ref?: string | null;
   target: number;
   window_days: number;
+  window_start?: string | null;
+  window_end?: string | null;
   latency_threshold_ms?: number | null;
   enabled?: boolean;
 };
@@ -642,4 +646,5 @@ export type SloInventory = {
   services: string[];
   endpoints: { service: string; endpoint: string }[];
   infrastructure: string[];
+  retention?: { days: number; earliest: string; latest: string };
 };

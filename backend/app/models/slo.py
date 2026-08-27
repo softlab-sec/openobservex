@@ -27,8 +27,16 @@ class SLO(Base):
     service: Mapped[str | None] = mapped_column(String(128), nullable=True)
     # objective target as a percentage, e.g. 99.9
     target: Mapped[float] = mapped_column(Float)
-    # rolling evaluation window in days, e.g. 30
+    # rolling evaluation window in days, e.g. 30 (used when window_start/end are null)
     window_days: Mapped[int] = mapped_column(Integer, default=30)
+    # optional absolute range: when BOTH are set, the SLO is evaluated over the
+    # fixed [window_start, window_end) instead of the rolling window_days.
+    window_start: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    window_end: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     # for latency SLIs: a request is "good" if Duration <= this many ms. NULL for availability.
     latency_threshold_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
     # --- ownership & classification (services own SLOs; see target_kind/target_ref) ---
