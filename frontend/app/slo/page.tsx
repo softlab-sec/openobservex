@@ -42,6 +42,7 @@ const KINDS: { key: TargetKind; label: string }[] = [
 const TYPES: { key: EngineSliType; label: string; icon: string; hint: string }[] = [
   { key: "availability", label: "Availability", icon: "▦", hint: "Success rate" },
   { key: "latency", label: "Performance", icon: "⚙", hint: "Fast-enough rate" },
+  { key: "error_rate", label: "Error rate", icon: "⚠", hint: "Failure rate" },
 ];
 
 function budgetColor(pct: number | null): string {
