@@ -114,9 +114,10 @@ export type PeriodDef = {
 };
 
 export const PERIODS: PeriodDef[] = [
+  { key: "last_1", label: "Last 24 hours", days: 1 },
   { key: "last_7", label: "Last 7 days", days: 7 },
+  { key: "last_14", label: "Last 14 days", days: 14 },
   { key: "last_30", label: "Last 30 days", days: 30 },
-  { key: "last_90", label: "Last 90 days", days: 90 },
 ];
 
 export function periodKeyForDays(days: number): string | null {
