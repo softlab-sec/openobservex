@@ -32,7 +32,7 @@ Honest simplifications (first version):
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from app.db.clickhouse import ch_query
 from app.db.postgres import SessionLocal
@@ -209,6 +209,75 @@ def evaluate_slo(slo) -> dict:
         is_meeting=sli >= target,
     )
     return result
+
+
+def budget_analytics(slo, db) -> dict:
+    """Derive error-budget depth from the status history time series (Phase 4).
+
+    Two on-read values, not stored (they are re-derivable from history):
+
+      projected_exhaustion_at  When the remaining budget hits zero if the CURRENT
+                               burn rate holds. Straight-line extrapolation from
+                               the cached burn_rate/budget; None when not burning,
+                               already exhausted, or no rate available. Advisory,
+                               not a guarantee.
+
+      breach_active / breach_since / breach_seconds
+                               The most recent CONTIGUOUS run of not-meeting rows
+                               ending at the latest sample. breach_since is that
+                               run's earliest evaluated_at; breach_seconds is
+                               now - breach_since. If the latest sample is meeting,
+                               there is no active breach. "at_least" is True when
+                               the run reaches the oldest history we have, so the
+                               real start may be earlier than we can see.
+    """
+    from app.models.slo import SLOStatusHistory  # local import avoids cycle
+
+    now = datetime.now(timezone.utc)
+    out: dict = {
+        "projected_exhaustion_at": None,
+        "breach_active": False,
+        "breach_since": None,
+        "breach_seconds": None,
+        "breach_at_least": False,
+    }
+
+    # --- projected exhaustion: from the SLO's current cached status ---
+    budget = slo.budget_remaining_pct
+    burn = slo.burn_rate
+    # burn_rate is (recent bad frac / allowed bad frac): 1.0 burns the whole
+    # budget over exactly one window. Days-to-zero = remaining_windows * window_days.
+    if budget is not None and budget > 0 and burn is not None and burn > 0:
+        remaining_frac = budget / 100.0            # e.g. 40% left -> 0.4
+        windows_left = remaining_frac / burn       # burn=2 -> 0.2 windows left
+        days_left = windows_left * slo.window_days
+        out["projected_exhaustion_at"] = (now + timedelta(days=days_left)).isoformat()
+
+    # --- active breach run: walk history newest-first ---
+    rows = (
+        db.query(SLOStatusHistory.evaluated_at, SLOStatusHistory.is_meeting)
+        .filter(SLOStatusHistory.slo_id == slo.id)
+        .order_by(SLOStatusHistory.evaluated_at.desc())
+        .all()
+    )
+    if rows:
+        latest_meeting = rows[0][1]
+        if latest_meeting is False:  # currently breached
+            breach_since = rows[0][0]
+            reached_oldest = True
+            for evaluated_at, is_meeting in rows:
+                if is_meeting is False:
+                    breach_since = evaluated_at
+                else:
+                    reached_oldest = False
+                    break
+            bs = breach_since if breach_since.tzinfo else breach_since.replace(tzinfo=timezone.utc)
+            out["breach_active"] = True
+            out["breach_since"] = bs.isoformat()
+            out["breach_seconds"] = int((now - bs).total_seconds())
+            out["breach_at_least"] = reached_oldest
+
+    return out
 
 
 # how often the worker re-evaluates all SLOs. SLOs use long rolling windows and

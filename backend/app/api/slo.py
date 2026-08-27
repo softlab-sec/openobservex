@@ -12,6 +12,7 @@ from app.db.postgres import get_db
 from app.db.clickhouse import ch_query
 from app.models import SLO, User
 from app.services import slo as slo_engine
+from app.services.slo import budget_analytics
 from app.core.roles import require_role
 from app.core.audit import record_audit
 
@@ -152,9 +153,37 @@ class SLOOut(BaseModel):
     is_meeting: bool | None
     last_evaluated_at: datetime | None
     created_at: datetime
+    budget: "BudgetAnalytics | None" = None
 
     class Config:
         from_attributes = True
+
+
+class BudgetAnalytics(BaseModel):
+    """Derived, on-read error-budget depth (Phase 4). Nullable throughout: when a
+    value cannot be computed (no history, not currently burning) it is null rather
+    than a fabricated number. breach_active is a real boolean answer."""
+    projected_exhaustion_at: datetime | None = None
+    breach_active: bool = False
+    breach_since: datetime | None = None
+    breach_seconds: int | None = None
+    breach_at_least: bool = False
+
+
+def serialize_slo(slo, db) -> "SLOOut":
+    """Single source of truth for an SLO API response: base fields from the ORM
+    plus derived `budget` analytics. Every SLOOut-returning handler routes through
+    here so list and detail expose an identical shape."""
+    out = SLOOut.model_validate(slo)
+    raw = budget_analytics(slo, db)
+    out.budget = BudgetAnalytics(
+        projected_exhaustion_at=raw["projected_exhaustion_at"],
+        breach_active=raw["breach_active"],
+        breach_since=raw["breach_since"],
+        breach_seconds=raw["breach_seconds"],
+        breach_at_least=raw["breach_at_least"],
+    )
+    return out
 
 
 # what an SLO can be attached to. api/endpoint resolve to the same telemetry
@@ -233,7 +262,7 @@ def list_slos(user: User = Depends(get_current_user), db: Session = Depends(get_
     rows = db.scalars(
         select(SLO).where(SLO.organization_id == user.organization_id).order_by(SLO.created_at.desc())
     ).all()
-    return list(rows)
+    return [serialize_slo(r, db) for r in rows]
 
 
 @router.post("", response_model=SLOOut, status_code=201, dependencies=[Depends(require_role("member"))])
@@ -282,7 +311,7 @@ def create_slo(
         },
         request=request,
     )
-    return slo
+    return serialize_slo(slo, db)
 
 
 def _get_owned(slo_id: uuid.UUID, user: User, db: Session) -> SLO:
@@ -291,7 +320,7 @@ def _get_owned(slo_id: uuid.UUID, user: User, db: Session) -> SLO:
     )
     if slo is None:
         raise HTTPException(status_code=404, detail="SLO not found")
-    return slo
+    return serialize_slo(slo, db)
 
 
 @router.patch("/{slo_id}", response_model=SLOOut, dependencies=[Depends(require_role("member"))])
@@ -332,7 +361,7 @@ def update_slo(
             actor=user, resource_id=slo.id, resource_name=slo.name,
             before=before, after=after, request=request,
         )
-    return slo
+    return serialize_slo(slo, db)
 
 
 @router.delete("/{slo_id}", status_code=204, dependencies=[Depends(require_role("admin"))])
@@ -372,7 +401,7 @@ def evaluate_slo_now(
     slo_engine.apply_status(slo, status)
     db.commit()
     db.refresh(slo)
-    return slo
+    return serialize_slo(slo, db)
 
 
 @router.post("/{slo_id}/clone", response_model=SLOOut, status_code=201, dependencies=[Depends(require_role("member"))])
@@ -414,4 +443,7 @@ def clone_slo(
         },
         request=request,
     )
-    return clone
+    return serialize_slo(clone, db)
+
+
+SLOOut.model_rebuild()

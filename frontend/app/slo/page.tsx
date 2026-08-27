@@ -335,6 +335,17 @@ function SloCard({
           <div className="mt-0.5 text-xs text-white/40">
             {sliLabel(slo)} · {slo.window_days}d window
           </div>
+          {slo.budget?.breach_active && slo.budget.breach_seconds != null && (
+            <div className="mt-0.5 text-xs text-rose-300/80">
+              Breached for {slo.budget.breach_at_least ? "\u2265" : "~"}
+              {humanizeDuration(slo.budget.breach_seconds)}
+            </div>
+          )}
+          {slo.budget?.projected_exhaustion_at && (
+            <div className="mt-0.5 text-xs text-amber-300/80">
+              Budget exhausts in ~{untilFrom(slo.budget.projected_exhaustion_at)}
+            </div>
+          )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <span
@@ -378,14 +389,14 @@ function SloCard({
             meeting === null ? "text-white/40" : meeting ? "text-emerald-300" : "text-red-300"
           }`}
         >
-          {sli === null ? "--" : `${sli.toFixed(3)}%`}
+          {sli === null ? "--" : `${sli.toFixed(2)}%`}
         </span>
-        <span className="text-sm text-white/40">target {slo.target}%</span>
+        <span className="text-sm text-white/40">target {slo.target.toFixed(2)}%</span>
       </div>
 
       <div className="mb-1 flex items-center justify-between text-xs text-white/40">
         <span>Error budget remaining</span>
-        <span className="tabular-nums">{budget === null ? "--" : `${budget.toFixed(1)}%`}</span>
+        <span className="tabular-nums">{budget === null ? "--" : `${budget.toFixed(2)}%`}</span>
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-white/10">
         <div
@@ -432,6 +443,24 @@ type FormState = {
   team: string;
   tags: string;
 };
+
+// Humanize a breach duration in seconds -> compact "3h" / "5d" / "12m".
+function humanizeDuration(seconds: number): string {
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  const m = seconds / 60;
+  if (m < 60) return `${Math.round(m)}m`;
+  const h = m / 60;
+  if (h < 24) return `${Math.round(h)}h`;
+  return `${Math.round(h / 24)}d`;
+}
+
+// Days until a future ISO timestamp, compact -> "6d" / "18h" / "soon".
+function untilFrom(iso: string): string {
+  const secs = (new Date(iso).getTime() - Date.now()) / 1000;
+  if (secs <= 0) return "now";
+  if (secs < 3600) return "soon";
+  return humanizeDuration(secs);
+}
 
 // ISO timestamp -> value for a <input type="datetime-local"> (local, no seconds/zone)
 function toLocalInput(iso: string): string {

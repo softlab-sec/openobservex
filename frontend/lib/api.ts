@@ -620,6 +620,13 @@ export type Slo = {
   burn_rate: number | null;
   total_events: number | null;
   is_meeting: boolean | null;
+  budget?: {
+    projected_exhaustion_at: string | null;
+    breach_active: boolean;
+    breach_since: string | null;
+    breach_seconds: number | null;
+    breach_at_least: boolean;
+  } | null;
   last_evaluated_at: string | null;
   created_at: string;
 };
