@@ -12,7 +12,7 @@
 // multiple conditions, absolute/calendar date ranges) are intentionally absent
 // until their engine support exists.
 
-export type EngineSliType = "availability" | "latency";
+export type EngineSliType = "availability" | "latency" | "error_rate";
 
 export type UnitDef = {
   key: string;
@@ -54,6 +54,7 @@ export type TargetKind = "service" | "api" | "endpoint" | "infrastructure";
 export const OPERATORS: Record<string, OperatorDef> = {
   gte: { key: "gte", symbol: "≥", label: "at least" },
   lt: { key: "lt", symbol: "<", label: "under" },
+  lte: { key: "lte", symbol: "≤", label: "at most" },
 };
 
 export const METRICS: MetricDef[] = [
@@ -85,6 +86,19 @@ export const METRICS: MetricDef[] = [
     hasThreshold: true,
     defaultThreshold: 500,
     source: "APM traces",
+    targetKinds: ["service", "api", "endpoint"],
+  },
+  {
+    key: "error_rate",
+    label: "Error rate",
+    sliType: "error_rate",
+    description: "Percentage of requests that errored over the evaluation period. Lower is better; the objective is a ceiling.",
+    operator: OPERATORS.lte,
+    units: [{ key: "pct", label: "%" }],
+    defaultUnit: "pct",
+    hasThreshold: false,
+    defaultThreshold: null,
+    source: null,
     targetKinds: ["service", "api", "endpoint"],
   },
 ];

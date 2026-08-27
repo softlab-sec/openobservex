@@ -18,7 +18,7 @@ from app.core.audit import record_audit
 
 router = APIRouter(prefix="/api/v1/slos", tags=["slos"])
 
-SLI_TYPES = {"availability", "latency"}
+SLI_TYPES = {"availability", "latency", "error_rate"}
 
 # window for inventory discovery: wide enough that recently-quiet targets still appear
 _INVENTORY_WINDOW_HOURS = 168  # 7 days

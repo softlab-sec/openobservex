@@ -59,9 +59,9 @@ function targetLine(slo: Slo): string {
 }
 
 function sliLabel(slo: Slo): string {
-  return slo.sli_type === "latency"
-    ? `Latency · under ${slo.latency_threshold_ms}ms`
-    : "Availability";
+  if (slo.sli_type === "latency") return `Latency · under ${slo.latency_threshold_ms}ms`;
+  if (slo.sli_type === "error_rate") return "Error rate";
+  return "Availability";
 }
 
 function ValidationMessage({ msg }: { msg?: string | null }) {
@@ -597,6 +597,7 @@ export default function SloPage() {
 
   const metric = metricByKey(form.metricKey);
   const isLatency = metric.sliType === "latency";
+  const isErrorRate = metric.sliType === "error_rate";
   const unit = unitByKey(metric, form.unitKey);
 
   // Target kinds are constrained by what the selected metric can measure.
@@ -782,7 +783,9 @@ export default function SloPage() {
   const showEndpointPicker = form.target_kind === "api" || form.target_kind === "endpoint";
   const conditionStr = isLatency
     ? `${Number.isFinite(form.targetPct) ? form.targetPct : "?"}% of requests complete within ${form.thresholdValue ?? "?"} ${unit.label}`
-    : `Target ${metric.label.toLowerCase()} \u2265 ${Number.isFinite(form.targetPct) ? form.targetPct : "?"}%`;
+    : isErrorRate
+    ? `Error rate must stay below ${Number.isFinite(form.targetPct) ? form.targetPct : "?"}%`
+    : `Target ${metric.label.toLowerCase()} ≥ ${Number.isFinite(form.targetPct) ? form.targetPct : "?"}%`;
 
   return (
     <Shell>

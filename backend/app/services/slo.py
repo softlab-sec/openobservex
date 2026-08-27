@@ -177,11 +177,15 @@ def evaluate_slo(slo) -> dict:
         )
         return result
 
-    sli = good / total * 100.0
     target = slo.target
+    is_error_rate = slo.sli_type == "error_rate"
+    if is_error_rate:
+        sli = (total - good) / total * 100.0
+    else:
+        sli = good / total * 100.0
 
     # Error budget in fractional terms.
-    allowed_bad_frac = (100.0 - target) / 100.0  # e.g. target 99.9 -> 0.001
+    allowed_bad_frac = (target / 100.0) if is_error_rate else ((100.0 - target) / 100.0)
     actual_bad_frac = (total - good) / total
 
     if allowed_bad_frac <= 0:
@@ -206,7 +210,7 @@ def evaluate_slo(slo) -> dict:
         current_sli=round(sli, 4),
         budget_remaining_pct=round(display_budget, 2),
         burn_rate=round(burn_rate, 2) if burn_rate is not None else None,
-        is_meeting=sli >= target,
+        is_meeting=(sli <= target) if is_error_rate else (sli >= target),
     )
     return result
 
