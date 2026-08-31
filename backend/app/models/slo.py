@@ -39,6 +39,14 @@ class SLO(Base):
     )
     # for latency SLIs: a request is "good" if Duration <= this many ms. NULL for availability.
     latency_threshold_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # throughput: request-rate floor in requests/minute; a 1-minute bucket is
+    # "good" when its request count is at or above this value.
+    rate_threshold_per_min: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # throughput flexibility: bucket window the engine groups by (60=per-minute,
+    # 300=per-5-min, 3600=per-hour) and the display unit the floor was entered in
+    # (rate stays normalized to per-minute in rate_threshold_per_min).
+    throughput_bucket_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    throughput_rate_unit: Mapped[str | None] = mapped_column(String(16), nullable=True)
     # --- ownership & classification (services own SLOs; see target_kind/target_ref) ---
     description: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     owner: Mapped[str | None] = mapped_column(String(255), nullable=True)

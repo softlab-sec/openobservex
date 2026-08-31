@@ -20,6 +20,8 @@ export type UnitDef = {
   // For duration units only: convert a value in this unit to milliseconds,
   // which is what the engine stores. Omitted for non-duration units.
   toMs?: (v: number) => number;
+  // throughput: convert this unit's value into requests-per-minute for storage.
+  toPerMin?: (v: number) => number;
 };
 
 export type OperatorDef = {
@@ -47,6 +49,8 @@ export type MetricDef = {
   source: string | null;
   // Which target kinds this metric can actually be measured against today.
   targetKinds: TargetKind[];
+  // throughput only: selectable evaluation bucket windows. null for other metrics.
+  bucketWindows?: { key: number; label: string; noun: string }[];
 };
 
 export type TargetKind = "service" | "api" | "endpoint" | "infrastructure";
@@ -100,6 +104,29 @@ export const METRICS: MetricDef[] = [
     defaultThreshold: null,
     source: null,
     targetKinds: ["service", "api", "endpoint"],
+  },
+  {
+    key: "throughput",
+    label: "Throughput",
+    sliType: "throughput",
+    description:
+      "Share of 1-minute buckets whose request count meets the rate floor. Preserves the error-budget model: a minute below the floor spends budget, like a failed request does for availability.",
+    operator: OPERATORS.gte,
+    units: [
+      { key: "rps", label: "req/sec", toPerMin: (v) => v * 60 },
+      { key: "rpm", label: "req/min", toPerMin: (v) => v },
+      { key: "rph", label: "req/hour", toPerMin: (v) => v / 60 },
+    ],
+    defaultUnit: "rpm",
+    hasThreshold: true,
+    defaultThreshold: 50,
+    source: "APM traces",
+    targetKinds: ["service", "api", "endpoint"],
+    bucketWindows: [
+      { key: 60, label: "per minute", noun: "minutes" },
+      { key: 300, label: "per 5 minutes", noun: "5-minute windows" },
+      { key: 3600, label: "per hour", noun: "hours" },
+    ],
   },
 ];
 

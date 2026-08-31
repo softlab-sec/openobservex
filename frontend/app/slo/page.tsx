@@ -43,6 +43,7 @@ const TYPES: { key: EngineSliType; label: string; icon: string; hint: string }[]
   { key: "availability", label: "Availability", icon: "▦", hint: "Success rate" },
   { key: "latency", label: "Performance", icon: "⚙", hint: "Fast-enough rate" },
   { key: "error_rate", label: "Error rate", icon: "⚠", hint: "Failure rate" },
+  { key: "throughput", label: "Throughput", icon: "≈", hint: "Sustained rate" },
 ];
 
 function budgetColor(pct: number | null): string {
@@ -62,6 +63,7 @@ function targetLine(slo: Slo): string {
 function sliLabel(slo: Slo): string {
   if (slo.sli_type === "latency") return `Latency · under ${slo.latency_threshold_ms}ms`;
   if (slo.sli_type === "error_rate") return "Error rate";
+  if (slo.sli_type === "throughput") return `Throughput \u00b7 \u2265 ${slo.rate_threshold_per_min} req/min`;
   return "Availability";
 }
 
@@ -82,6 +84,8 @@ function ConditionRow({
   onThreshold,
   unitKey,
   onUnit,
+  bucketSeconds,
+  onBucket,
   availabilityValue,
   onAvailabilityValue,
   thresholdErr,
@@ -96,6 +100,8 @@ function ConditionRow({
   onThreshold: (v: number | null) => void;
   unitKey: string;
   onUnit: (k: string) => void;
+  bucketSeconds: number;
+  onBucket: (n: number) => void;
   availabilityValue: number;
   onAvailabilityValue: (v: number) => void;
   thresholdErr?: string;
@@ -135,6 +141,7 @@ function ConditionRow({
         <div>
           <label className={labelCls}>Value {req}</label>
           {isThreshold ? (
+            <>
             <div className="flex gap-2">
               <input
                 type="number"
@@ -164,6 +171,21 @@ function ConditionRow({
                 </div>
               )}
             </div>
+            {metric.bucketWindows && (
+              <div className="mt-3">
+                <label className="mb-1 block text-xs text-white/40">Evaluation window</label>
+                <select
+                  value={bucketSeconds}
+                  onChange={(e) => onBucket(Number(e.target.value))}
+                  className="rounded-lg border border-white/10 bg-black/30 px-2 py-2 text-sm outline-none focus:border-white/40"
+                >
+                  {metric.bucketWindows.map((w) => (
+                    <option key={w.key} value={w.key}>{w.label}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            </>
           ) : (
             <div className="flex gap-2">
               <input
@@ -435,6 +457,7 @@ type FormState = {
   metricKey: string;
   thresholdValue: number | null;
   unitKey: string;
+  bucketSeconds: number;
   targetPct: number;
   periodDays: number;
   rangeMode: "rolling" | "custom";
@@ -479,6 +502,7 @@ const EMPTY_FORM: FormState = {
   metricKey: "availability",
   thresholdValue: null,
   unitKey: "pct",
+  bucketSeconds: 60,
   targetPct: 99.9,
   periodDays: 30,
   rangeMode: "rolling",
@@ -561,8 +585,9 @@ export default function SloPage() {
       name: slo.name,
       description: slo.description ?? "",
       metricKey: metric.key,
-      thresholdValue: metric.hasThreshold ? (slo.latency_threshold_ms ?? metric.defaultThreshold) : null,
-      unitKey: metric.defaultUnit,
+      thresholdValue: metric.hasThreshold ? ((metric.sliType === "throughput" ? slo.rate_threshold_per_min : slo.latency_threshold_ms) ?? metric.defaultThreshold) : null,
+      unitKey: (metric.sliType === "throughput" && slo.throughput_rate_unit) ? slo.throughput_rate_unit : metric.defaultUnit,
+      bucketSeconds: slo.throughput_bucket_seconds ?? 60,
       targetPct: slo.target,
       periodDays: slo.window_days,
       rangeMode: slo.window_start && slo.window_end ? "custom" : "rolling",
@@ -599,7 +624,10 @@ export default function SloPage() {
   const metric = metricByKey(form.metricKey);
   const isLatency = metric.sliType === "latency";
   const isErrorRate = metric.sliType === "error_rate";
+  const isThroughput = metric.sliType === "throughput";
   const unit = unitByKey(metric, form.unitKey);
+  const bucketWin = metric.bucketWindows?.find((w) => w.key === form.bucketSeconds);
+  const bucketNoun = bucketWin?.noun ?? "minutes";
 
   // Target kinds are constrained by what the selected metric can measure.
   const availableKinds = useMemo(
@@ -625,6 +653,7 @@ export default function SloPage() {
         ...f,
         metricKey: m.key,
         unitKey: m.defaultUnit,
+        bucketSeconds: 60,
         thresholdValue: m.hasThreshold ? (f.thresholdValue ?? m.defaultThreshold) : null,
         ...kindReset,
       };
@@ -641,6 +670,7 @@ export default function SloPage() {
         ...f,
         metricKey: m.key,
         unitKey: m.defaultUnit,
+        bucketSeconds: 60,
         thresholdValue: m.hasThreshold ? (f.thresholdValue ?? m.defaultThreshold) : null,
         ...kindReset,
       };
@@ -707,6 +737,16 @@ export default function SloPage() {
         isLatency && metric.hasThreshold && form.thresholdValue != null
           ? Math.round(unit.toMs ? unit.toMs(form.thresholdValue) : form.thresholdValue)
           : null;
+      const rate_threshold_per_min =
+        metric.sliType === "throughput" && form.thresholdValue != null
+          ? (unit.toPerMin ? unit.toPerMin(form.thresholdValue) : form.thresholdValue)
+          : null;
+      // throughput evaluation bucket window + the unit the floor was entered in,
+      // so the SLO round-trips to the same unit on edit. null for other metrics.
+      const throughput_bucket_seconds =
+        metric.sliType === "throughput" ? form.bucketSeconds : null;
+      const throughput_rate_unit =
+        metric.sliType === "throughput" ? form.unitKey : null;
 
       const payload: SloInput = {
         name: form.name.trim(),
@@ -729,6 +769,9 @@ export default function SloPage() {
             ? new Date(form.customEnd).toISOString()
             : null,
         latency_threshold_ms,
+        rate_threshold_per_min,
+        throughput_bucket_seconds,
+        throughput_rate_unit,
       };
 
       if (editingId) {
@@ -782,7 +825,9 @@ export default function SloPage() {
 
   const showServicePicker = form.target_kind !== "infrastructure";
   const showEndpointPicker = form.target_kind === "api" || form.target_kind === "endpoint";
-  const conditionStr = isLatency
+  const conditionStr = isThroughput
+    ? `≥ ${Number.isFinite(form.targetPct) ? form.targetPct : "?"}% of ${bucketNoun} sustain ≥ ${form.thresholdValue ?? "?"} ${unit.label}`
+    : isLatency
     ? `${Number.isFinite(form.targetPct) ? form.targetPct : "?"}% of requests complete within ${form.thresholdValue ?? "?"} ${unit.label}`
     : isErrorRate
     ? `Error rate must stay below ${Number.isFinite(form.targetPct) ? form.targetPct : "?"}%`
@@ -996,6 +1041,8 @@ export default function SloPage() {
                       onThreshold={(v) => setForm({ ...form, thresholdValue: v })}
                       unitKey={form.unitKey}
                       onUnit={(k) => setForm({ ...form, unitKey: k })}
+                      bucketSeconds={form.bucketSeconds}
+                      onBucket={(n) => setForm({ ...form, bucketSeconds: n })}
                       availabilityValue={form.targetPct}
                       onAvailabilityValue={(v) => setForm({ ...form, targetPct: v })}
                       thresholdErr={showErr("threshold")}
@@ -1004,7 +1051,7 @@ export default function SloPage() {
                       onTouchAvailability={() => markTouched("targetPct")}
                     />
 
-                    {isLatency && (
+                    {(isLatency || isThroughput) && (
                       <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-4">
                         <label className={labelCls}>Objective {req}</label>
                         <div className="flex flex-wrap items-center gap-2">
@@ -1023,7 +1070,9 @@ export default function SloPage() {
                             className="w-28 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none focus:border-white/40"
                           />
                           <span className="text-sm text-white/50">
-                            % of requests must complete within {form.thresholdValue ?? "?"} {unit.label} over the period
+                            {isThroughput
+                              ? `% of ${bucketNoun} must sustain \u2265 ${form.thresholdValue ?? "?"} ${unit.label} over the period`
+                              : `% of requests must complete within ${form.thresholdValue ?? "?"} ${unit.label} over the period`}
                           </span>
                         </div>
                         <ValidationMessage msg={showErr("targetPct")} />

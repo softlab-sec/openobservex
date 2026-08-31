@@ -18,7 +18,7 @@ from app.core.audit import record_audit
 
 router = APIRouter(prefix="/api/v1/slos", tags=["slos"])
 
-SLI_TYPES = {"availability", "latency", "error_rate"}
+SLI_TYPES = {"availability", "latency", "error_rate", "throughput"}
 
 # window for inventory discovery: wide enough that recently-quiet targets still appear
 _INVENTORY_WINDOW_HOURS = 168  # 7 days
@@ -108,6 +108,9 @@ class SLOIn(BaseModel):
     window_start: datetime | None = None
     window_end: datetime | None = None
     latency_threshold_ms: float | None = None
+    rate_threshold_per_min: float | None = None
+    throughput_bucket_seconds: int | None = None
+    throughput_rate_unit: str | None = None
     enabled: bool = True
 
 
@@ -126,6 +129,9 @@ class SLOUpdate(BaseModel):
     window_start: datetime | None = None
     window_end: datetime | None = None
     latency_threshold_ms: float | None = None
+    rate_threshold_per_min: float | None = None
+    throughput_bucket_seconds: int | None = None
+    throughput_rate_unit: str | None = None
     enabled: bool | None = None
 
 
@@ -145,6 +151,9 @@ class SLOOut(BaseModel):
     window_start: datetime | None
     window_end: datetime | None
     latency_threshold_ms: float | None
+    rate_threshold_per_min: float | None
+    throughput_bucket_seconds: int | None
+    throughput_rate_unit: str | None
     enabled: bool
     current_sli: float | None
     budget_remaining_pct: float | None
@@ -224,6 +233,8 @@ def _validate_range(window_start, window_end) -> None:
 def _validate(
     sli_type: str,
     latency_threshold_ms: float | None,
+    rate_threshold_per_min: float | None,
+    throughput_bucket_seconds: int | None,
     target_kind: str,
     service: str | None,
     target_ref: str | None,
@@ -234,6 +245,16 @@ def _validate(
         raise HTTPException(
             status_code=400,
             detail="latency SLOs require latency_threshold_ms (a millisecond target)",
+        )
+    if sli_type == "throughput" and not rate_threshold_per_min:
+        raise HTTPException(
+            status_code=400,
+            detail="throughput SLOs require rate_threshold_per_min (a requests-per-minute floor)",
+        )
+    if sli_type == "throughput" and throughput_bucket_seconds is not None and throughput_bucket_seconds not in (60, 300, 3600):
+        raise HTTPException(
+            status_code=400,
+            detail="throughput_bucket_seconds must be 60 (per-minute), 300 (per-5-minute), or 3600 (per-hour)",
         )
     if target_kind not in TARGET_KINDS:
         raise HTTPException(status_code=400, detail=f"target_kind must be one of {sorted(TARGET_KINDS)}")
@@ -276,7 +297,7 @@ def create_slo(
     target_ref = body.target_ref
     if body.target_kind == "service" and not (target_ref and target_ref.strip()):
         target_ref = body.service
-    _validate(body.sli_type, body.latency_threshold_ms, body.target_kind, body.service, target_ref)
+    _validate(body.sli_type, body.latency_threshold_ms, body.rate_threshold_per_min, body.throughput_bucket_seconds, body.target_kind, body.service, target_ref)
     _validate_range(body.window_start, body.window_end)
     slo = SLO(
         organization_id=user.organization_id,
@@ -294,6 +315,9 @@ def create_slo(
         window_start=body.window_start,
         window_end=body.window_end,
         latency_threshold_ms=body.latency_threshold_ms,
+        rate_threshold_per_min=body.rate_threshold_per_min,
+        throughput_bucket_seconds=body.throughput_bucket_seconds,
+        throughput_rate_unit=body.throughput_rate_unit,
         enabled=body.enabled,
     )
     db.add(slo)
@@ -306,7 +330,10 @@ def create_slo(
             "name": slo.name, "sli_type": slo.sli_type, "target_kind": slo.target_kind,
             "service": slo.service, "target_ref": slo.target_ref,
             "target": slo.target, "window_days": slo.window_days,
-            "latency_threshold_ms": slo.latency_threshold_ms, "enabled": slo.enabled,
+            "latency_threshold_ms": slo.latency_threshold_ms,
+            "rate_threshold_per_min": slo.rate_threshold_per_min,
+            "throughput_bucket_seconds": slo.throughput_bucket_seconds,
+            "throughput_rate_unit": slo.throughput_rate_unit, "enabled": slo.enabled,
             "owner": slo.owner, "team": slo.team, "tags": slo.tags,
         },
         request=request,
@@ -320,7 +347,7 @@ def _get_owned(slo_id: uuid.UUID, user: User, db: Session) -> SLO:
     )
     if slo is None:
         raise HTTPException(status_code=404, detail="SLO not found")
-    return serialize_slo(slo, db)
+    return slo
 
 
 @router.patch("/{slo_id}", response_model=SLOOut, dependencies=[Depends(require_role("member"))])
@@ -336,7 +363,8 @@ def update_slo(
         "name", "description", "owner", "team", "tags",
         "sli_type", "target_kind", "service", "target_ref",
         "target", "window_days", "window_start", "window_end",
-        "latency_threshold_ms", "enabled",
+        "latency_threshold_ms", "rate_threshold_per_min",
+        "throughput_bucket_seconds", "throughput_rate_unit", "enabled",
     ]
     before, after = {}, {}
     data = body.model_dump(exclude_unset=True)
@@ -345,7 +373,7 @@ def update_slo(
             before[f] = getattr(slo, f)
             setattr(slo, f, data[f])
             after[f] = data[f]
-    _validate(slo.sli_type, slo.latency_threshold_ms, slo.target_kind, slo.service, slo.target_ref)
+    _validate(slo.sli_type, slo.latency_threshold_ms, slo.rate_threshold_per_min, slo.throughput_bucket_seconds, slo.target_kind, slo.service, slo.target_ref)
     _validate_range(slo.window_start, slo.window_end)
     # a definition change invalidates the cached status until re-evaluated
     if after:

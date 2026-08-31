@@ -145,6 +145,85 @@ def _counts(
     return int(good), int(total)
 
 
+def _throughput_buckets(
+    target_kind: str,
+    service: str | None,
+    target_ref: str | None,
+    rate_floor_per_min: float,
+    since_hours: float,
+    start: datetime | None = None,
+    end: datetime | None = None,
+    bucket_seconds: int = 60,
+) -> tuple[int, int]:
+    """Throughput SLI, bucketed. Divide the window into 1-minute buckets, count
+    requests per bucket for the scoped target, and return
+    (good_buckets, total_buckets) where a bucket is GOOD when its request count
+    meets the rate floor (>= rate_floor_per_min).
+
+    This preserves the error-budget framing: good_buckets/total_buckets is a
+    ratio just like good_events/total_events, so budget, burn, breach duration
+    and projected exhaustion all work unchanged. Scope matches the request-count
+    kinds (service/api/endpoint by ServiceName [+ SpanName]); infrastructure is
+    metric-native and fails closed, same as _counts.
+    """
+    # A bucket is GOOD when its request count meets the floor RATE over the
+    # bucket's length: required = floor_per_min * (bucket_seconds / 60).
+    bucket_seconds = int(bucket_seconds) if bucket_seconds else 60
+    required_count = float(rate_floor_per_min) * (bucket_seconds / 60.0)
+    params: dict = {"required": required_count, "bkt": bucket_seconds}
+    clauses: list[str] = []
+
+    if start is not None and end is not None:
+        time_clause = "Timestamp >= {start:DateTime64(9)} AND Timestamp < {end:DateTime64(9)}"
+        params["start"] = start
+        params["end"] = end
+    else:
+        time_clause = "Timestamp >= now() - INTERVAL {hrs:Float64} HOUR"
+        params["hrs"] = since_hours
+
+    # scope: throughput counts REQUESTS, so use root spans for service/api
+    # (one row per request) and span matches for endpoint operations.
+    if target_kind in ("api", "endpoint"):
+        if not (service and target_ref):
+            return 0, 0
+        clauses.append("ServiceName = {svc:String}")
+        clauses.append("SpanName = {ref:String}")
+        params["svc"] = service
+        params["ref"] = target_ref
+    elif target_kind == "infrastructure":
+        return 0, 0
+    else:  # service
+        if not service:
+            return 0, 0
+        clauses.append("ServiceName = {svc:String}")
+        params["svc"] = service
+
+    scope_clause = ("AND " + " AND ".join(clauses)) if clauses else ""
+    # Count requests per 1-minute bucket, then count how many buckets meet the
+    # floor. Only buckets that actually have data are counted as total buckets
+    # (a window with no traffic reports 0/0 -> undefined SLI, consistent with
+    # the rest of the engine, rather than penalising quiet periods as breaches).
+    sql = f"""
+        SELECT
+            countIf(cnt >= {{required:Float64}}) AS good_buckets,
+            count() AS total_buckets
+        FROM (
+            SELECT toStartOfInterval(Timestamp, INTERVAL {{bkt:UInt32}} SECOND) AS bucket,
+                   count() AS cnt
+            FROM otel_traces
+            WHERE {time_clause}
+              AND ParentSpanId = ''
+              {scope_clause}
+            GROUP BY bucket
+        )
+    """
+    rows = ch_query(sql, params).result_rows
+    if not rows:
+        return 0, 0
+    good, total = rows[0][0], rows[0][1]
+    return int(good), int(total)
+
+
 def evaluate_slo(slo) -> dict:
     """Compute current SLI, budget, and burn rate for one SLO.
 
@@ -157,10 +236,23 @@ def evaluate_slo(slo) -> dict:
     abs_start = getattr(slo, "window_start", None)
     abs_end = getattr(slo, "window_end", None)
     is_absolute = abs_start is not None and abs_end is not None
-    good, total = _counts(
-        good_pred, slo.target_kind, slo.service, slo.target_ref,
-        window_hours, start=abs_start, end=abs_end,
-    )
+    is_throughput = slo.sli_type == "throughput"
+    if is_throughput:
+        # Throughput SLI: share of 1-minute buckets meeting the request-rate
+        # floor. good=good_buckets, total=total_buckets, a good/total ratio, so
+        # the budget/burn/meeting math below is reused unchanged (throughput
+        # behaves like availability: meet when bucket-success rate >= target).
+        good, total = _throughput_buckets(
+            slo.target_kind, slo.service, slo.target_ref,
+            float(slo.rate_threshold_per_min or 0),
+            window_hours, start=abs_start, end=abs_end,
+            bucket_seconds=int(slo.throughput_bucket_seconds or 60),
+        )
+    else:
+        good, total = _counts(
+            good_pred, slo.target_kind, slo.service, slo.target_ref,
+            window_hours, start=abs_start, end=abs_end,
+        )
 
     result: dict = {
         "total_events": total,
@@ -197,7 +289,14 @@ def evaluate_slo(slo) -> dict:
     # Burn rate: recent bad fraction vs the sustainable (budget) bad fraction.
     burn_rate: float | None = None
     if allowed_bad_frac > 0 and not is_absolute:
-        rgood, rtotal = _counts(good_pred, slo.target_kind, slo.service, slo.target_ref, _BURN_WINDOW_HOURS)
+        if is_throughput:
+            rgood, rtotal = _throughput_buckets(
+                slo.target_kind, slo.service, slo.target_ref,
+                float(slo.rate_threshold_per_min or 0), _BURN_WINDOW_HOURS,
+                bucket_seconds=int(slo.throughput_bucket_seconds or 60),
+            )
+        else:
+            rgood, rtotal = _counts(good_pred, slo.target_kind, slo.service, slo.target_ref, _BURN_WINDOW_HOURS)
         if rtotal > 0:
             recent_bad_frac = (rtotal - rgood) / rtotal
             burn_rate = recent_bad_frac / allowed_bad_frac
