@@ -44,6 +44,7 @@ const TYPES: { key: EngineSliType; label: string; icon: string; hint: string }[]
   { key: "latency", label: "Performance", icon: "⚙", hint: "Fast-enough rate" },
   { key: "error_rate", label: "Error rate", icon: "⚠", hint: "Failure rate" },
   { key: "throughput", label: "Throughput", icon: "≈", hint: "Sustained rate" },
+  { key: "latency_percentile", label: "Latency percentile", icon: "∴", hint: "Tail latency" },
 ];
 
 function budgetColor(pct: number | null): string {
@@ -64,6 +65,7 @@ function sliLabel(slo: Slo): string {
   if (slo.sli_type === "latency") return `Latency · under ${slo.latency_threshold_ms}ms`;
   if (slo.sli_type === "error_rate") return "Error rate";
   if (slo.sli_type === "throughput") return `Throughput \u00b7 \u2265 ${slo.rate_threshold_per_min} req/min`;
+  if (slo.sli_type === "latency_percentile") return `Latency p${Math.round((slo.latency_percentile ?? 0.95) * 100)} \u00b7 under ${slo.latency_threshold_ms}ms`;
   return "Availability";
 }
 
@@ -86,6 +88,8 @@ function ConditionRow({
   onUnit,
   bucketSeconds,
   onBucket,
+  percentile,
+  onPercentile,
   availabilityValue,
   onAvailabilityValue,
   thresholdErr,
@@ -102,6 +106,8 @@ function ConditionRow({
   onUnit: (k: string) => void;
   bucketSeconds: number;
   onBucket: (n: number) => void;
+  percentile: number;
+  onPercentile: (n: number) => void;
   availabilityValue: number;
   onAvailabilityValue: (v: number) => void;
   thresholdErr?: string;
@@ -181,6 +187,20 @@ function ConditionRow({
                 >
                   {metric.bucketWindows.map((w) => (
                     <option key={w.key} value={w.key}>{w.label}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {metric.percentiles && (
+              <div className="mt-3">
+                <label className="mb-1 block text-xs text-white/40">Percentile</label>
+                <select
+                  value={percentile}
+                  onChange={(e) => onPercentile(Number(e.target.value))}
+                  className="rounded-lg border border-white/10 bg-black/30 px-2 py-2 text-sm outline-none focus:border-white/40"
+                >
+                  {metric.percentiles.map((p) => (
+                    <option key={p.key} value={p.key}>{p.label}</option>
                   ))}
                 </select>
               </div>
@@ -458,6 +478,7 @@ type FormState = {
   thresholdValue: number | null;
   unitKey: string;
   bucketSeconds: number;
+  percentile: number;
   targetPct: number;
   periodDays: number;
   rangeMode: "rolling" | "custom";
@@ -503,6 +524,7 @@ const EMPTY_FORM: FormState = {
   thresholdValue: null,
   unitKey: "pct",
   bucketSeconds: 60,
+  percentile: 0.95,
   targetPct: 99.9,
   periodDays: 30,
   rangeMode: "rolling",
@@ -587,7 +609,8 @@ export default function SloPage() {
       metricKey: metric.key,
       thresholdValue: metric.hasThreshold ? ((metric.sliType === "throughput" ? slo.rate_threshold_per_min : slo.latency_threshold_ms) ?? metric.defaultThreshold) : null,
       unitKey: (metric.sliType === "throughput" && slo.throughput_rate_unit) ? slo.throughput_rate_unit : metric.defaultUnit,
-      bucketSeconds: slo.throughput_bucket_seconds ?? 60,
+      bucketSeconds: slo.bucket_seconds ?? 60,
+      percentile: slo.latency_percentile ?? 0.95,
       targetPct: slo.target,
       periodDays: slo.window_days,
       rangeMode: slo.window_start && slo.window_end ? "custom" : "rolling",
@@ -625,9 +648,11 @@ export default function SloPage() {
   const isLatency = metric.sliType === "latency";
   const isErrorRate = metric.sliType === "error_rate";
   const isThroughput = metric.sliType === "throughput";
+  const isPercentile = metric.sliType === "latency_percentile";
   const unit = unitByKey(metric, form.unitKey);
   const bucketWin = metric.bucketWindows?.find((w) => w.key === form.bucketSeconds);
   const bucketNoun = bucketWin?.noun ?? "minutes";
+  const pctlLabel = metric.percentiles?.find((p) => p.key === form.percentile)?.label ?? "p95";
 
   // Target kinds are constrained by what the selected metric can measure.
   const availableKinds = useMemo(
@@ -654,6 +679,7 @@ export default function SloPage() {
         metricKey: m.key,
         unitKey: m.defaultUnit,
         bucketSeconds: 60,
+        percentile: 0.95,
         thresholdValue: m.hasThreshold ? (f.thresholdValue ?? m.defaultThreshold) : null,
         ...kindReset,
       };
@@ -671,6 +697,7 @@ export default function SloPage() {
         metricKey: m.key,
         unitKey: m.defaultUnit,
         bucketSeconds: 60,
+        percentile: 0.95,
         thresholdValue: m.hasThreshold ? (f.thresholdValue ?? m.defaultThreshold) : null,
         ...kindReset,
       };
@@ -734,7 +761,7 @@ export default function SloPage() {
             : form.target_ref.trim();
 
       const latency_threshold_ms =
-        isLatency && metric.hasThreshold && form.thresholdValue != null
+        (isLatency || isPercentile) && metric.hasThreshold && form.thresholdValue != null
           ? Math.round(unit.toMs ? unit.toMs(form.thresholdValue) : form.thresholdValue)
           : null;
       const rate_threshold_per_min =
@@ -743,8 +770,12 @@ export default function SloPage() {
           : null;
       // throughput evaluation bucket window + the unit the floor was entered in,
       // so the SLO round-trips to the same unit on edit. null for other metrics.
-      const throughput_bucket_seconds =
-        metric.sliType === "throughput" ? form.bucketSeconds : null;
+      const bucket_seconds =
+        metric.sliType === "throughput" || metric.sliType === "latency_percentile"
+          ? form.bucketSeconds
+          : null;
+      const latency_percentile =
+        metric.sliType === "latency_percentile" ? form.percentile : null;
       const throughput_rate_unit =
         metric.sliType === "throughput" ? form.unitKey : null;
 
@@ -770,7 +801,8 @@ export default function SloPage() {
             : null,
         latency_threshold_ms,
         rate_threshold_per_min,
-        throughput_bucket_seconds,
+        latency_percentile,
+        bucket_seconds,
         throughput_rate_unit,
       };
 
@@ -825,7 +857,9 @@ export default function SloPage() {
 
   const showServicePicker = form.target_kind !== "infrastructure";
   const showEndpointPicker = form.target_kind === "api" || form.target_kind === "endpoint";
-  const conditionStr = isThroughput
+  const conditionStr = isPercentile
+    ? `≥ ${Number.isFinite(form.targetPct) ? form.targetPct : "?"}% of ${bucketNoun} kept ${pctlLabel} ≤ ${form.thresholdValue ?? "?"} ${unit.label}`
+    : isThroughput
     ? `≥ ${Number.isFinite(form.targetPct) ? form.targetPct : "?"}% of ${bucketNoun} sustain ≥ ${form.thresholdValue ?? "?"} ${unit.label}`
     : isLatency
     ? `${Number.isFinite(form.targetPct) ? form.targetPct : "?"}% of requests complete within ${form.thresholdValue ?? "?"} ${unit.label}`
@@ -1043,6 +1077,8 @@ export default function SloPage() {
                       onUnit={(k) => setForm({ ...form, unitKey: k })}
                       bucketSeconds={form.bucketSeconds}
                       onBucket={(n) => setForm({ ...form, bucketSeconds: n })}
+                      percentile={form.percentile}
+                      onPercentile={(n) => setForm({ ...form, percentile: n })}
                       availabilityValue={form.targetPct}
                       onAvailabilityValue={(v) => setForm({ ...form, targetPct: v })}
                       thresholdErr={showErr("threshold")}
@@ -1071,7 +1107,9 @@ export default function SloPage() {
                           />
                           <span className="text-sm text-white/50">
                             {isThroughput
-                              ? `% of ${bucketNoun} must sustain \u2265 ${form.thresholdValue ?? "?"} ${unit.label} over the period`
+                              ? isPercentile
+                                ? `% of ${bucketNoun} kept ${pctlLabel} \u2264 ${form.thresholdValue ?? "?"} ${unit.label} over the period`
+                                : `% of ${bucketNoun} must sustain \u2265 ${form.thresholdValue ?? "?"} ${unit.label} over the period`
                               : `% of requests must complete within ${form.thresholdValue ?? "?"} ${unit.label} over the period`}
                           </span>
                         </div>

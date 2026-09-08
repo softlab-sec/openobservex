@@ -12,7 +12,7 @@
 // multiple conditions, absolute/calendar date ranges) are intentionally absent
 // until their engine support exists.
 
-export type EngineSliType = "availability" | "latency" | "error_rate";
+export type EngineSliType = "availability" | "latency" | "error_rate" | "throughput" | "latency_percentile";
 
 export type UnitDef = {
   key: string;
@@ -51,6 +51,8 @@ export type MetricDef = {
   targetKinds: TargetKind[];
   // throughput only: selectable evaluation bucket windows. null for other metrics.
   bucketWindows?: { key: number; label: string; noun: string }[];
+  // percentile-latency only: selectable percentiles (0.5/0.95/0.99). null otherwise.
+  percentiles?: { key: number; label: string }[];
 };
 
 export type TargetKind = "service" | "api" | "endpoint" | "infrastructure";
@@ -126,6 +128,33 @@ export const METRICS: MetricDef[] = [
       { key: 60, label: "per minute", noun: "minutes" },
       { key: 300, label: "per 5 minutes", noun: "5-minute windows" },
       { key: 3600, label: "per hour", noun: "hours" },
+    ],
+  },
+  {
+    key: "latency_percentile",
+    label: "Latency percentile",
+    sliType: "latency_percentile",
+    description:
+      "Share of time buckets whose Nth-percentile latency stays under the threshold. Measures the latency at a percentile (p50/p95/p99), not the share of requests under a bound. Preserves the error-budget model: a bucket over the threshold spends budget.",
+    operator: OPERATORS.lte,
+    units: [
+      { key: "ms", label: "ms", toMs: (v) => v },
+      { key: "s", label: "s", toMs: (v) => v * 1000 },
+    ],
+    defaultUnit: "ms",
+    hasThreshold: true,
+    defaultThreshold: 500,
+    source: "APM traces",
+    targetKinds: ["service", "api", "endpoint"],
+    bucketWindows: [
+      { key: 60, label: "per minute", noun: "minutes" },
+      { key: 300, label: "per 5 minutes", noun: "5-minute windows" },
+      { key: 3600, label: "per hour", noun: "hours" },
+    ],
+    percentiles: [
+      { key: 0.5, label: "p50" },
+      { key: 0.95, label: "p95" },
+      { key: 0.99, label: "p99" },
     ],
   },
 ];

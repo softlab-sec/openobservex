@@ -224,6 +224,79 @@ def _throughput_buckets(
     return int(good), int(total)
 
 
+def _percentile_buckets(
+    target_kind: str,
+    service: str | None,
+    target_ref: str | None,
+    percentile: float,
+    threshold_ms: float,
+    since_hours: float,
+    start: datetime | None = None,
+    end: datetime | None = None,
+    bucket_seconds: int = 60,
+) -> tuple[int, int]:
+    """Percentile-latency SLI, bucketed. Split the window into buckets; per bucket
+    compute quantile(percentile)(Duration); a bucket is GOOD when that bucket's
+    percentile latency is at or under the threshold. Returns (good_buckets,
+    total_buckets), a good/total ratio so budget/burn/breach math is reused
+    unchanged. Distinct from the count-under-threshold "latency" SLI: it measures
+    the latency AT a percentile, not the share of requests under a bound. Scope
+    matches the request kinds (service/api by root spans, endpoint by span name);
+    infrastructure fails closed.
+    """
+    threshold_ns = float(threshold_ms) * 1_000_000
+    bucket_seconds = int(bucket_seconds) if bucket_seconds else 60
+    params: dict = {"thr": threshold_ns, "p": float(percentile), "bkt": bucket_seconds}
+    clauses: list[str] = []
+
+    if start is not None and end is not None:
+        time_clause = "Timestamp >= {start:DateTime64(9)} AND Timestamp < {end:DateTime64(9)}"
+        params["start"] = start
+        params["end"] = end
+    else:
+        time_clause = "Timestamp >= now() - INTERVAL {hrs:Float64} HOUR"
+        params["hrs"] = since_hours
+
+    if target_kind in ("api", "endpoint"):
+        if not (service and target_ref):
+            return 0, 0
+        clauses.append("ServiceName = {svc:String}")
+        clauses.append("SpanName = {ref:String}")
+        params["svc"] = service
+        params["ref"] = target_ref
+    elif target_kind == "infrastructure":
+        return 0, 0
+    else:  # service
+        if not service:
+            return 0, 0
+        clauses.append("ServiceName = {svc:String}")
+        params["svc"] = service
+
+    # root spans for service/api (one row per request); endpoint matches its span
+    # name (may be root or child), so no root filter is forced there.
+    root_clause = "AND ParentSpanId = ''" if target_kind != "endpoint" else ""
+    scope_clause = ("AND " + " AND ".join(clauses)) if clauses else ""
+    sql = f"""
+        SELECT
+            countIf(pctl <= {{thr:Float64}}) AS good_buckets,
+            count() AS total_buckets
+        FROM (
+            SELECT toStartOfInterval(Timestamp, INTERVAL {{bkt:UInt32}} SECOND) AS bucket,
+                   quantile({{p:Float64}})(Duration) AS pctl
+            FROM otel_traces
+            WHERE {time_clause}
+              {root_clause}
+              {scope_clause}
+            GROUP BY bucket
+        )
+    """
+    rows = ch_query(sql, params).result_rows
+    if not rows:
+        return 0, 0
+    good, total = rows[0][0], rows[0][1]
+    return int(good), int(total)
+
+
 def evaluate_slo(slo) -> dict:
     """Compute current SLI, budget, and burn rate for one SLO.
 
@@ -237,6 +310,7 @@ def evaluate_slo(slo) -> dict:
     abs_end = getattr(slo, "window_end", None)
     is_absolute = abs_start is not None and abs_end is not None
     is_throughput = slo.sli_type == "throughput"
+    is_percentile = slo.sli_type == "latency_percentile"
     if is_throughput:
         # Throughput SLI: share of 1-minute buckets meeting the request-rate
         # floor. good=good_buckets, total=total_buckets, a good/total ratio, so
@@ -246,7 +320,19 @@ def evaluate_slo(slo) -> dict:
             slo.target_kind, slo.service, slo.target_ref,
             float(slo.rate_threshold_per_min or 0),
             window_hours, start=abs_start, end=abs_end,
-            bucket_seconds=int(slo.throughput_bucket_seconds or 60),
+            bucket_seconds=int(slo.bucket_seconds or 60),
+        )
+    elif is_percentile:
+        # Percentile-latency SLI: share of buckets whose Nth-percentile latency
+        # is at or under the threshold. good=good_buckets, total=total_buckets,
+        # a good/total ratio, so budget/burn/meeting math is reused unchanged
+        # (meet when >= target% of buckets kept the percentile under the bound).
+        good, total = _percentile_buckets(
+            slo.target_kind, slo.service, slo.target_ref,
+            float(slo.latency_percentile or 0.95),
+            float(slo.latency_threshold_ms or 0),
+            window_hours, start=abs_start, end=abs_end,
+            bucket_seconds=int(slo.bucket_seconds or 60),
         )
     else:
         good, total = _counts(
@@ -293,7 +379,14 @@ def evaluate_slo(slo) -> dict:
             rgood, rtotal = _throughput_buckets(
                 slo.target_kind, slo.service, slo.target_ref,
                 float(slo.rate_threshold_per_min or 0), _BURN_WINDOW_HOURS,
-                bucket_seconds=int(slo.throughput_bucket_seconds or 60),
+                bucket_seconds=int(slo.bucket_seconds or 60),
+            )
+        elif is_percentile:
+            rgood, rtotal = _percentile_buckets(
+                slo.target_kind, slo.service, slo.target_ref,
+                float(slo.latency_percentile or 0.95),
+                float(slo.latency_threshold_ms or 0), _BURN_WINDOW_HOURS,
+                bucket_seconds=int(slo.bucket_seconds or 60),
             )
         else:
             rgood, rtotal = _counts(good_pred, slo.target_kind, slo.service, slo.target_ref, _BURN_WINDOW_HOURS)

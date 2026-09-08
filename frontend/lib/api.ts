@@ -614,8 +614,9 @@ export type Slo = {
   window_start: string | null;
   window_end: string | null;
   latency_threshold_ms: number | null;
+  latency_percentile: number | null;
   rate_threshold_per_min: number | null;
-  throughput_bucket_seconds: number | null;
+  bucket_seconds: number | null;
   throughput_rate_unit: string | null;
   enabled: boolean;
   current_sli: number | null;
@@ -649,8 +650,9 @@ export type SloInput = {
   window_start?: string | null;
   window_end?: string | null;
   latency_threshold_ms?: number | null;
+  latency_percentile?: number | null;
   rate_threshold_per_min?: number | null;
-  throughput_bucket_seconds?: number | null;
+  bucket_seconds?: number | null;
   throughput_rate_unit?: string | null;
   enabled?: boolean;
 };
