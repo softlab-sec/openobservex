@@ -15,6 +15,8 @@ import {
   metricByKey,
   metricBySliType,
   metricsForType,
+  metricsForCategory,
+  CATEGORIES,
   unitByKey,
   periodKeyForDays,
   resolveWindow,
@@ -39,13 +41,6 @@ const KINDS: { key: TargetKind; label: string }[] = [
   { key: "infrastructure", label: "Infrastructure" },
 ];
 
-const TYPES: { key: EngineSliType; label: string; icon: string; hint: string }[] = [
-  { key: "availability", label: "Availability", icon: "▦", hint: "Success rate" },
-  { key: "latency", label: "Performance", icon: "⚙", hint: "Fast-enough rate" },
-  { key: "error_rate", label: "Error rate", icon: "⚠", hint: "Failure rate" },
-  { key: "throughput", label: "Throughput", icon: "≈", hint: "Sustained rate" },
-  { key: "latency_percentile", label: "Latency percentile", icon: "∴", hint: "Tail latency" },
-];
 
 function budgetColor(pct: number | null): string {
   if (pct === null) return "bg-white/20";
@@ -116,7 +111,6 @@ function ConditionRow({
   onTouchAvailability: () => void;
 }) {
   const isThreshold = metric.hasThreshold;
-  const selectableMetric = metricOptions.length > 1;
 
   return (
     <div className="rounded-lg border border-white/10 bg-black/20 p-4">
@@ -129,19 +123,29 @@ function ConditionRow({
         </div>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div className="sm:col-span-2">
-          <label className={labelCls}>Metric {req}</label>
-          {selectableMetric ? (
-            <select value={metric.key} onChange={(e) => onMetric(e.target.value)} className={inputCls}>
-              {metricOptions.map((m) => (
-                <option key={m.key} value={m.key}>{m.label}</option>
-              ))}
-            </select>
-          ) : (
-            <div className={fixedCls}>{metric.label}</div>
-          )}
+      <div className="mb-4">
+        <label className={labelCls}>Metric {req}</label>
+        <div className="flex flex-wrap gap-1.5">
+          {metricsForCategory(metric.category).map((m) => {
+            const active = metric.key === m.key;
+            return (
+              <button
+                key={m.key}
+                type="button"
+                onClick={() => onMetric(m.key)}
+                className={`rounded-full border px-3 py-1.5 text-sm transition ${
+                  active
+                    ? "border-white/25 bg-white/15 text-white"
+                    : "border-white/10 text-white/50 hover:bg-white/5 hover:text-white"
+                }`}
+              >
+                {m.label}
+              </button>
+            );
+          })}
         </div>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
 
 
         <div>
@@ -666,24 +670,11 @@ export default function SloPage() {
   function setService(svc: string) {
     setForm((f) => ({ ...f, service: svc, target_ref: "" }));
   }
-  function setType(t: EngineSliType) {
-    const m = metricBySliType(t);
-    setForm((f) => {
-      // If the current target kind is not valid for the new metric, reset it.
-      const kindOk = m.targetKinds.includes(f.target_kind);
-      const kindReset = kindOk
-        ? {}
-        : { target_kind: m.targetKinds[0], service: "", target_ref: "", host: "" };
-      return {
-        ...f,
-        metricKey: m.key,
-        unitKey: m.defaultUnit,
-        bucketSeconds: 60,
-        percentile: 0.95,
-        thresholdValue: m.hasThreshold ? (f.thresholdValue ?? m.defaultThreshold) : null,
-        ...kindReset,
-      };
-    });
+  function setCategory(cat: string) {
+    // Selecting a category selects that category's first metric, which drives
+    // the existing per-metric form via setMetric.
+    const first = metricsForCategory(cat)[0];
+    if (first) setMetric(first.key);
   }
   function setMetric(key: string) {
     const m = metricByKey(key);
@@ -925,27 +916,26 @@ export default function SloPage() {
               <p className="py-6 text-center text-sm text-white/30">Loading inventory...</p>
             ) : (
               <div className="flex flex-col gap-6 sm:flex-row">
-                <div className="flex gap-2 sm:w-44 sm:shrink-0 sm:flex-col">
-                  {TYPES.map((t) => {
-                    const active = metric.sliType === t.key;
-                    return (
-                      <button
-                        key={t.key}
-                        onClick={() => setType(t.key)}
-                        className={`flex flex-1 items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition sm:flex-none ${
-                          active
-                            ? "border-white/15 bg-white/10 text-white"
-                            : "border-transparent text-white/50 hover:bg-white/5 hover:text-white"
-                        }`}
-                      >
-                        <span className="text-base leading-none">{t.icon}</span>
-                        <span className="flex flex-col leading-tight">
-                          <span>{t.label}</span>
-                          <span className="text-[10px] text-white/40">{t.hint}</span>
-                        </span>
-                      </button>
-                    );
-                  })}
+                <div className="flex flex-col gap-3 sm:w-44 sm:shrink-0">
+                  <div className="flex gap-2 sm:flex-col">
+                    {CATEGORIES.map((cat) => {
+                      const active = metric.category === cat.key;
+                      return (
+                        <button
+                          key={cat.key}
+                          onClick={() => setCategory(cat.key)}
+                          className={`flex flex-1 flex-col rounded-lg border px-3 py-2 text-left text-sm transition sm:flex-none ${
+                            active
+                              ? "border-white/15 bg-white/10 text-white"
+                              : "border-transparent text-white/50 hover:bg-white/5 hover:text-white"
+                          }`}
+                        >
+                          <span>{cat.label}</span>
+                          <span className="text-[10px] text-white/40">{cat.hint}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 <div className="min-w-0 flex-1 space-y-6">

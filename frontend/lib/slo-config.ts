@@ -34,6 +34,8 @@ export type MetricDef = {
   key: string;
   label: string;
   sliType: EngineSliType;
+  // UX grouping for the builder: which top-level category this metric lives under.
+  category: "availability" | "performance";
   // Accurate description of what the engine actually measures.
   description: string;
   // Slice 1: exactly one operator per metric, fixed (not yet user-selectable).
@@ -68,6 +70,7 @@ export const METRICS: MetricDef[] = [
     key: "availability",
     label: "Availability",
     sliType: "availability",
+    category: "availability",
     description: "Percentage of successful requests over the evaluation period.",
     operator: OPERATORS.gte,
     units: [{ key: "pct", label: "%" }],
@@ -81,6 +84,7 @@ export const METRICS: MetricDef[] = [
     key: "response_duration",
     label: "Response time",
     sliType: "latency",
+    category: "performance",
     description:
       "Share of requests whose duration is under the threshold. This is a request-count rate, not a percentile.",
     operator: OPERATORS.lt,
@@ -98,6 +102,7 @@ export const METRICS: MetricDef[] = [
     key: "error_rate",
     label: "Error rate",
     sliType: "error_rate",
+    category: "availability",
     description: "Percentage of requests that errored over the evaluation period. Lower is better; the objective is a ceiling.",
     operator: OPERATORS.lte,
     units: [{ key: "pct", label: "%" }],
@@ -111,6 +116,7 @@ export const METRICS: MetricDef[] = [
     key: "throughput",
     label: "Throughput",
     sliType: "throughput",
+    category: "performance",
     description:
       "Share of 1-minute buckets whose request count meets the rate floor. Preserves the error-budget model: a minute below the floor spends budget, like a failed request does for availability.",
     operator: OPERATORS.gte,
@@ -134,6 +140,7 @@ export const METRICS: MetricDef[] = [
     key: "latency_percentile",
     label: "Latency percentile",
     sliType: "latency_percentile",
+    category: "performance",
     description:
       "Share of time buckets whose Nth-percentile latency stays under the threshold. Measures the latency at a percentile (p50/p95/p99), not the share of requests under a bound. Preserves the error-budget model: a bucket over the threshold spends budget.",
     operator: OPERATORS.lte,
@@ -170,6 +177,15 @@ export function unitByKey(metric: MetricDef, key: string): UnitDef {
 }
 export function metricsForType(t: EngineSliType): MetricDef[] {
   return METRICS.filter((m) => m.sliType === t);
+}
+
+export const CATEGORIES: { key: "availability" | "performance"; label: string; hint: string }[] = [
+  { key: "availability", label: "Availability", hint: "Is the service up?" },
+  { key: "performance", label: "Performance", hint: "Is it fast and handling load?" },
+];
+
+export function metricsForCategory(cat: string): MetricDef[] {
+  return METRICS.filter((m) => m.category === cat);
 }
 
 // ---- Evaluation period ------------------------------------------------------
