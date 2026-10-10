@@ -42,11 +42,11 @@ def _trace_filters(
     """Build a shared WHERE clause so every widget honours the same filters."""
     clauses = ["Timestamp >= now() - INTERVAL {mins:UInt32} MINUTE"]
     params: dict = {"mins": minutes}
-    if root_only:
-        clauses.append("ParentSpanId = ''")
     if service:
         clauses.append("ServiceName = {svc:String}")
         params["svc"] = service
+    elif root_only:
+        clauses.append("ParentSpanId = ''")
     if errors_only:
         clauses.append("StatusCode = 'Error'")
     clauses.append("{tenant_scope}")

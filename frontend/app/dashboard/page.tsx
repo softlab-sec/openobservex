@@ -268,7 +268,7 @@ export default function DashboardPage() {
           suffix="/100"
           tone={ov ? (ov.error_rate > 5 ? "danger" : "good") : "default"}
         />
-        <Stat label="Requests" value={ov?.requests ?? "-"} />
+        <Stat label={service ? "Operations" : "Requests"} value={ov?.requests ?? "-"} />
         <Stat
           label="Errors"
           value={ov?.errors ?? "-"}
@@ -306,7 +306,7 @@ export default function DashboardPage() {
       )}
 
       <div className="mb-6 grid gap-3 lg:grid-cols-2">
-        <Card title="Request volume">
+        <Card title={service ? "Operation volume" : "Request volume"}>
           <ResponsiveContainer width="100%" height={220}>
             <AreaChart data={series}>
               <defs>
