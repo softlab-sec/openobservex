@@ -192,6 +192,8 @@ services:
   ollama:
     image: ollama/ollama:latest
     container_name: oox-ollama
+    environment:
+      OLLAMA_KEEP_ALIVE: "-1"
     restart: unless-stopped
     volumes:
       - ollama_models:/root/.ollama

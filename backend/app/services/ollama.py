@@ -63,6 +63,7 @@ def generate(
         "prompt": prompt,
         "system": system,
         "stream": False,
+        "keep_alive": -1,
         "options": {"temperature": temperature, "num_ctx": 4096},
     }
     if schema is not None:
