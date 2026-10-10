@@ -49,7 +49,7 @@ export default function JobTitleSelect({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder="Enter your job title"
-          className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none focus:border-white/40"
+          className="w-full rounded-lg border border-border bg-surface-elevated px-3 py-2 text-sm outline-none focus:border-border"
         />
         <button
           type="button"
@@ -57,7 +57,7 @@ export default function JobTitleSelect({
             setIsOther(false);
             onChange("");
           }}
-          className="shrink-0 rounded-lg border border-white/10 px-3 text-xs text-white/50 transition hover:text-white"
+          className="shrink-0 rounded-lg border border-border px-3 text-xs text-text-muted transition hover:text-text-primary"
         >
           Back to list
         </button>
@@ -70,9 +70,9 @@ export default function JobTitleSelect({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-left text-sm outline-none transition hover:border-white/25 focus:border-white/40"
+        className="flex w-full items-center justify-between rounded-lg border border-border bg-surface-elevated px-3 py-2 text-left text-sm outline-none transition hover:border-border focus:border-border"
       >
-        <span className={value ? "text-white/80" : "text-white/30"}>
+        <span className={value ? "text-text-secondary" : "text-text-muted"}>
           {value || "Select your role"}
         </span>
         <svg width="10" height="10" viewBox="0 0 12 12" className="opacity-50">
@@ -80,28 +80,28 @@ export default function JobTitleSelect({
         </svg>
       </button>
       {open && (
-        <div className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-lg border border-white/15 bg-neutral-900/95 p-1 shadow-xl backdrop-blur">
+        <div className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-lg border border-border bg-surface-card/95 p-1 shadow-xl backdrop-blur">
           <input
             autoFocus
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search roles"
-            className="mb-1 w-full rounded-md border border-white/10 bg-black/40 px-2.5 py-1.5 text-sm outline-none focus:border-white/30"
+            className="mb-1 w-full rounded-md border border-border bg-surface-elevated px-2.5 py-1.5 text-sm outline-none focus:border-border"
           />
           {filtered.map((t) => (
             <button
               key={t}
               type="button"
               onClick={() => pick(t)}
-              className={`flex w-full items-center rounded-md px-2 py-1.5 text-left text-sm transition hover:bg-white/10 ${
-                t === "Other" ? "text-sky-300" : "text-white/80"
-              } ${value === t ? "bg-white/5" : ""}`}
+              className={`flex w-full items-center rounded-md px-2 py-1.5 text-left text-sm transition hover:bg-surface-hover ${
+                t === "Other" ? "text-accent" : "text-text-secondary"
+              } ${value === t ? "bg-surface-elevated" : ""}`}
             >
               {t}
             </button>
           ))}
           {filtered.length === 0 && (
-            <p className="px-2 py-3 text-center text-xs text-white/30">No match</p>
+            <p className="px-2 py-3 text-center text-xs text-text-muted">No match</p>
           )}
         </div>
       )}

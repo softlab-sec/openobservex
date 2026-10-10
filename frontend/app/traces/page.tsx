@@ -68,21 +68,21 @@ function TracesInner() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Traces</h1>
-          <p className="text-sm text-white/40">Click a trace to see its waterfall</p>
+          <p className="text-sm text-text-muted">Click a trace to see its waterfall</p>
         </div>
         <div className="flex items-center gap-3">
           {service && (
-            <span className="inline-flex items-center gap-1.5 rounded-lg border border-sky-400/30 bg-sky-500/10 px-2.5 py-1 text-xs text-sky-300">
+            <span className="inline-flex items-center gap-1.5 rounded-lg border border-status-info/30 bg-status-info/10 px-2.5 py-1 text-xs text-status-info">
               {service}
-              <button onClick={() => setService(null)} className="text-sky-300/60 hover:text-sky-200" aria-label="Clear service filter">✕</button>
+              <button onClick={() => setService(null)} className="text-status-info/60 hover:text-status-info" aria-label="Clear service filter">✕</button>
             </span>
           )}
           <button
             onClick={() => setErrorsOnly((v) => !v)}
             className={`rounded-lg border px-2.5 py-1 text-xs transition ${
               errorsOnly
-                ? "border-red-400/40 bg-red-500/15 text-red-300"
-                : "border-white/10 text-white/50 hover:text-white"
+                ? "border-status-critical/40 bg-status-critical/15 text-status-critical"
+                : "border-border text-text-muted hover:text-text-primary"
             }`}
           >
             Errors only
@@ -92,17 +92,17 @@ function TracesInner() {
       </div>
 
       {err && (
-        <p className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">
+        <p className="mb-4 rounded-lg border border-status-critical/30 bg-status-critical/10 p-3 text-sm text-status-critical">
           {err}
         </p>
       )}
 
       {selected && (
-        <Card className="mb-4 border-white/20 bg-white/[0.05]">
+        <Card className="mb-4 border-border bg-surface-elevated">
           <div className="mb-3 flex items-center justify-between">
             <div>
               <div className="text-base font-semibold">Trace waterfall</div>
-              <div className="font-mono text-xs text-white/40">
+              <div className="font-mono text-xs text-text-muted">
                 {selected.trace_id} · {selected.span_count} spans ·{" "}
                 {selected.total_ms.toFixed(2)} ms
               </div>
@@ -115,7 +115,7 @@ function TracesInner() {
                 setSelectedId(null);
                 setAnalysis(null);
               }}
-              className="rounded-lg border border-white/10 px-2 py-1 text-xs text-white/60 hover:bg-white/5"
+              className="rounded-lg border border-border px-2 py-1 text-xs text-text-secondary hover:bg-surface-elevated"
             >
               Close
             </button>
@@ -142,7 +142,7 @@ function TracesInner() {
       <Card>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="text-white/40">
+            <thead className="text-text-muted">
               <tr>
                 <th className="py-2 font-medium">Time</th>
                 <th className="py-2 font-medium">Service</th>
@@ -157,13 +157,13 @@ function TracesInner() {
                 <tr
                   key={r.TraceId}
                   onClick={() => open(r.TraceId)}
-                  className={`cursor-pointer border-t border-white/5 transition ${
+                  className={`cursor-pointer border-t border-border transition ${
                     selectedId === r.TraceId
-                      ? "bg-sky-500/15 ring-1 ring-inset ring-sky-400/40"
-                      : "hover:bg-white/[0.04]"
+                      ? "bg-status-info/15 ring-1 ring-inset ring-status-info/40"
+                      : "hover:bg-surface-elevated"
                   }`}
                 >
-                  <td className="py-2 font-mono text-xs text-white/50">
+                  <td className="py-2 font-mono text-xs text-text-muted">
                     {new Date(r.Timestamp).toLocaleTimeString()}
                   </td>
                   <td className="py-2">
@@ -173,8 +173,8 @@ function TracesInner() {
                     />
                     {r.ServiceName}
                   </td>
-                  <td className="py-2 text-white/80">{r.SpanName}</td>
-                  <td className="py-2 tabular-nums text-white/50">{r.span_count}</td>
+                  <td className="py-2 text-text-secondary">{r.SpanName}</td>
+                  <td className="py-2 tabular-nums text-text-muted">{r.span_count}</td>
                   <td className="py-2 tabular-nums">{r.duration_ms} ms</td>
                   <td className="py-2">
                     <Badge status={r.StatusCode} />
@@ -184,7 +184,7 @@ function TracesInner() {
             </tbody>
           </table>
           {rows.length === 0 && (
-            <p className="py-6 text-center text-sm text-white/30">
+            <p className="py-6 text-center text-sm text-text-muted">
               No traces in this window
             </p>
           )}
@@ -196,7 +196,7 @@ function TracesInner() {
 
 export default function TracesPage() {
   return (
-    <Suspense fallback={<Shell><p className="text-sm text-white/40">Loading traces…</p></Shell>}>
+    <Suspense fallback={<Shell><p className="text-sm text-text-muted">Loading traces…</p></Shell>}>
       <TracesInner />
     </Suspense>
   );

@@ -60,30 +60,30 @@ export default function PhoneInput({
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
-          className="flex h-full items-center gap-1.5 rounded-lg border border-white/10 bg-black/30 px-2.5 text-sm text-white/80 outline-none transition hover:border-white/25 focus:border-white/40"
+          className="flex h-full items-center gap-1.5 rounded-lg border border-border bg-surface-elevated px-2.5 text-sm text-text-secondary outline-none transition hover:border-border focus:border-border"
           aria-label="Select country"
         >
           <span className="text-base leading-none">{flagFor(country.code)}</span>
-          <span className="tabular-nums text-white/60">{country.dial}</span>
+          <span className="tabular-nums text-text-secondary">{country.dial}</span>
           <svg width="10" height="10" viewBox="0 0 12 12" className="opacity-50">
             <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" fill="none" />
           </svg>
         </button>
         {open && (
-          <div className="absolute z-20 mt-1 max-h-72 w-72 overflow-auto rounded-lg border border-white/15 bg-neutral-900/95 p-1 shadow-xl backdrop-blur">
+          <div className="absolute z-20 mt-1 max-h-72 w-72 overflow-auto rounded-lg border border-border bg-surface-card/95 p-1 shadow-xl backdrop-blur">
             <input
               autoFocus
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search country or code"
-              className="mb-1 w-full rounded-md border border-white/10 bg-black/40 px-2.5 py-1.5 text-sm outline-none focus:border-white/30"
+              className="mb-1 w-full rounded-md border border-border bg-surface-elevated px-2.5 py-1.5 text-sm outline-none focus:border-border"
             />
             {filtered.map((c, i) => {
               const prevPinned = i > 0 && filtered[i - 1].pinned;
               const divider = prevPinned && !c.pinned;
               return (
                 <div key={c.code}>
-                  {divider && <div className="my-1 border-t border-white/10" />}
+                  {divider && <div className="my-1 border-t border-border" />}
                   <button
                     type="button"
                     onClick={() => {
@@ -91,19 +91,19 @@ export default function PhoneInput({
                       setOpen(false);
                       setQ("");
                     }}
-                    className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition hover:bg-white/10 ${
-                      c.code === country.code ? "bg-white/5" : ""
+                    className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition hover:bg-surface-hover ${
+                      c.code === country.code ? "bg-surface-elevated" : ""
                     }`}
                   >
                     <span className="text-base leading-none">{flagFor(c.code)}</span>
-                    <span className="flex-1 truncate text-white/80">{c.name}</span>
-                    <span className="tabular-nums text-white/40">{c.dial}</span>
+                    <span className="flex-1 truncate text-text-secondary">{c.name}</span>
+                    <span className="tabular-nums text-text-muted">{c.dial}</span>
                   </button>
                 </div>
               );
             })}
             {filtered.length === 0 && (
-              <p className="px-2 py-3 text-center text-xs text-white/30">No match</p>
+              <p className="px-2 py-3 text-center text-xs text-text-muted">No match</p>
             )}
           </div>
         )}
@@ -114,10 +114,10 @@ export default function PhoneInput({
         value={national}
         onChange={(e) => setNational(e.target.value)}
         placeholder="801 234 5678"
-        className={`w-full rounded-lg border bg-black/30 px-3 py-2 text-sm outline-none transition ${
+        className={`w-full rounded-lg border bg-surface-elevated px-3 py-2 text-sm outline-none transition ${
           national && !valid
-            ? "border-red-500/50 focus:border-red-500/70"
-            : "border-white/10 focus:border-white/40"
+            ? "border-status-critical/50 focus:border-status-critical/70"
+            : "border-border focus:border-border"
         }`}
       />
     </div>

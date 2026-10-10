@@ -94,17 +94,17 @@ function KpiCell({ label, value, tone, active, onClick, href }: {
   active?: boolean; onClick?: () => void; href?: string;
 }) {
   const toneCls =
-    tone === "critical" ? "text-rose-300" : tone === "high" ? "text-orange-300"
-    : tone === "warning" ? "text-amber-300"
-    : tone === "info" ? "text-sky-300" : tone === "ack" ? "text-violet-300"
-    : tone === "resolved" ? "text-emerald-300" : "text-white/85";
+    tone === "critical" ? "text-status-critical" : tone === "high" ? "text-status-critical"
+    : tone === "warning" ? "text-status-warning"
+    : tone === "info" ? "text-status-info" : tone === "ack" ? "text-accent"
+    : tone === "resolved" ? "text-status-healthy" : "text-text-primary";
   const inner = (
     <>
       <div className={`text-2xl font-semibold tabular-nums ${toneCls}`}>{value}</div>
-      <div className="mt-0.5 text-[11px] uppercase tracking-wide text-white/40">{label}</div>
+      <div className="mt-0.5 text-[11px] uppercase tracking-wide text-text-muted">{label}</div>
     </>
   );
-  const base = `bg-[#0d0d12] px-4 py-3 text-left transition ${active ? "ring-1 ring-inset ring-white/25" : ""} ${(onClick || href) ? "hover:bg-white/[0.03]" : ""}`;
+  const base = `bg-surface-card px-4 py-3 text-left transition ${active ? "ring-1 ring-inset ring-accent" : ""} ${(onClick || href) ? "hover:bg-surface-elevated" : ""}`;
   if (href) return <a href={href} className={base + " block"}>{inner}</a>;
   if (onClick) return <button onClick={onClick} className={base + " block w-full"}>{inner}</button>;
   return <div className={base}>{inner}</div>;
@@ -154,15 +154,15 @@ function FiringAlerts({ minutes, filter, rules }: {
   const ruleFor = (a: IncidentRow) => rules.find((r) => r.id === a.rule_id);
   const lanes: Array<"critical" | "high" | "warning" | "info"> = ["critical", "high", "warning", "info"];
   const laneMeta: Record<string, { label: string; text: string; rule: string }> = {
-    critical: { label: "Critical", text: "text-rose-300", rule: "bg-rose-500/40" },
-    high: { label: "High", text: "text-orange-300", rule: "bg-orange-500/40" },
-    warning: { label: "Warning", text: "text-amber-300", rule: "bg-amber-400/40" },
-    info: { label: "Info", text: "text-sky-300", rule: "bg-sky-400/40" },
+    critical: { label: "Critical", text: "text-status-critical", rule: "bg-status-critical/40" },
+    high: { label: "High", text: "text-status-critical", rule: "bg-status-critical/40" },
+    warning: { label: "Warning", text: "text-status-warning", rule: "bg-status-warning/40" },
+    info: { label: "Info", text: "text-status-info", rule: "bg-status-info/40" },
   };
 
   if (shown.length === 0) {
     return (
-      <div className="mb-8 rounded-xl border border-white/10 bg-white/[0.02] px-4 py-8 text-center text-sm text-white/40">
+      <div className="mb-8 rounded-xl border border-border bg-surface-card px-4 py-8 text-center text-sm text-text-muted">
         {filter === "all" ? "No alerts firing right now." : `No ${filter === "ack" ? "acknowledged" : filter} alerts firing right now.`}
       </div>
     );
@@ -178,7 +178,7 @@ function FiringAlerts({ minutes, filter, rules }: {
           <div key={lane}>
             <div className="mb-2 flex items-center gap-3">
               <span className={`text-xs font-bold uppercase tracking-[0.2em] ${lm.text}`}>{lm.label}</span>
-              <span className="text-[11px] text-white/35">{laneAlerts.length}</span>
+              <span className="text-[11px] text-text-muted">{laneAlerts.length}</span>
               <span className={`h-px flex-1 ${lm.rule}`} />
             </div>
             <div className="space-y-2">
@@ -187,36 +187,36 @@ function FiringAlerts({ minutes, filter, rules }: {
                 const ackd = a.acknowledged_at != null;
                 const unit = a.kind === "error_rate" ? "%" : a.kind.startsWith("latency") ? "ms" : "";
                 return (
-                  <div key={a.id} className="rounded-lg border border-white/10 bg-white/[0.02] px-4 py-3">
+                  <div key={a.id} className="rounded-lg border border-border bg-surface-card px-4 py-3">
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                       <span className={`h-1.5 w-1.5 rounded-full ${lm.rule.replace("/40", "")}`} />
-                      <span className="font-medium text-white/90">{a.rule_name}</span>
-                      <span className="text-xs text-white/45">{a.service ?? "all services"}</span>
+                      <span className="font-medium text-text-primary">{a.rule_name}</span>
+                      <span className="text-xs text-text-muted">{a.service ?? "all services"}</span>
                       {ackd
-                        ? <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] text-amber-300">Acknowledged</span>
-                        : <span className="rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] text-rose-300">Unacknowledged</span>}
-                      <span className="ml-auto text-xs text-white/45">open {since(a.started_at)}</span>
+                        ? <span className="rounded-full bg-status-warning/15 px-2 py-0.5 text-[10px] text-status-warning">Acknowledged</span>
+                        : <span className="rounded-full bg-status-critical/15 px-2 py-0.5 text-[10px] text-status-critical">Unacknowledged</span>}
+                      <span className="ml-auto text-xs text-text-muted">open {since(a.started_at)}</span>
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-xs">
                       <span>
-                        <span className="text-white/35">Current: </span>
-                        <span className="font-semibold text-rose-300">{a.observed_value}{unit}</span>
+                        <span className="text-text-muted">Current: </span>
+                        <span className="font-semibold text-status-critical">{a.observed_value}{unit}</span>
                       </span>
                       <span>
-                        <span className="text-white/35">Threshold: </span>
-                        <span className="text-white/70">{a.threshold}{unit}</span>
+                        <span className="text-text-muted">Threshold: </span>
+                        <span className="text-text-secondary">{a.threshold}{unit}</span>
                       </span>
-                      {r && <span><span className="text-white/35">Sustained: </span><span className="text-white/70">{r.for_minutes}m</span></span>}
+                      {r && <span><span className="text-text-muted">Sustained: </span><span className="text-text-secondary">{r.for_minutes}m</span></span>}
                     </div>
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       {!ackd && canOperate(role) && (
                         <button disabled={busy === a.id} onClick={() => act(a.id, "acknowledge")}
-                          className="rounded-lg border border-amber-400/40 bg-amber-500/15 px-3 py-1 text-xs text-amber-200 hover:bg-amber-500/25">Acknowledge</button>
+                          className="rounded-lg border border-status-warning/40 bg-status-warning/15 px-3 py-1 text-xs text-status-warning hover:bg-status-warning/25">Acknowledge</button>
                       )}
                       {canOperate(role) && <button disabled={busy === a.id} onClick={() => act(a.id, "resolve")}
-                        className="rounded-lg border border-emerald-400/40 bg-emerald-500/15 px-3 py-1 text-xs text-emerald-200 hover:bg-emerald-500/25">Resolve</button>}
+                        className="rounded-lg border border-status-healthy/40 bg-status-healthy/15 px-3 py-1 text-xs text-status-healthy hover:bg-status-healthy/25">Resolve</button>}
                       <a href={`/incidents/${a.id}`}
-                        className="rounded-lg border border-white/15 px-3 py-1 text-xs text-white/70 hover:bg-white/5">Open incident →</a>
+                        className="rounded-lg border border-border px-3 py-1 text-xs text-text-secondary hover:bg-surface-elevated">Open incident →</a>
                     </div>
                   </div>
                 );
@@ -292,14 +292,14 @@ function RuleModal({
     } catch (e) { setErr((e as Error).message); } finally { setSaving(false); }
   }
 
-  const label = "mb-1 block text-xs uppercase tracking-wide text-white/40";
-  const input = "w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none focus:border-white/40";
+  const label = "mb-1 block text-xs uppercase tracking-wide text-text-muted";
+  const input = "w-full rounded-lg border border-border bg-surface-elevated px-3 py-2 text-sm outline-none focus:border-accent";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#0d0d0f] p-6" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-surface-elevated p-4" onClick={onClose}>
+      <div className="w-full max-w-lg rounded-2xl border border-border bg-surface-elevated p-6" onClick={(e) => e.stopPropagation()}>
         <h2 className="mb-4 text-lg font-semibold">{initial ? "Edit alert rule" : "New alert rule"}</h2>
-        {err && <p className="mb-3 rounded-lg border border-rose-500/30 bg-rose-500/10 p-2 text-xs text-rose-300">{err}</p>}
+        {err && <p className="mb-3 rounded-lg border border-status-critical/30 bg-status-critical/10 p-2 text-xs text-status-critical">{err}</p>}
 
         <div className="space-y-3">
           <div>
@@ -312,14 +312,14 @@ function RuleModal({
               <select className={input} value={form.kind} onChange={(e) => set("kind", e.target.value as AlertRuleInput["kind"])}>
                 {KIND_META.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
               </select>
-              <p className="mt-1 text-[11px] leading-snug text-white/40">
+              <p className="mt-1 text-[11px] leading-snug text-text-muted">
                 {KIND_META.find((m) => m.value === form.kind)?.desc}
               </p>
             </div>
             <div>
               <label className={label}>Service</label>
               {["cpu", "memory", "disk"].includes(form.kind) ? (
-                <div className={input + " flex items-center text-white/40"}>Cluster-wide (host metric)</div>
+                <div className={input + " flex items-center text-text-muted"}>Cluster-wide (host metric)</div>
               ) : (
                 <ServiceSelect value={form.service ?? null} onChange={(svc) => set("service", svc)} />
               )}
@@ -329,7 +329,7 @@ function RuleModal({
             const spec = KIND_FIELDS[form.kind];
             if (spec.note) {
               return (
-                <div className="rounded-lg border border-sky-500/20 bg-sky-500/[0.06] px-3 py-2.5 text-xs leading-relaxed text-sky-200/80">
+                <div className="rounded-lg border border-status-info/20 bg-status-info/[0.06] px-3 py-2.5 text-xs leading-relaxed text-status-info/80">
                   {spec.note}
                 </div>
               );
@@ -370,7 +370,7 @@ function RuleModal({
                       onChange={(e) => set("threshold", Number(e.target.value))}
                     />
                     {spec.unitLabel && (
-                      <span className="shrink-0 text-sm text-white/40">{spec.unitLabel}</span>
+                      <span className="shrink-0 text-sm text-text-muted">{spec.unitLabel}</span>
                     )}
                   </div>
                 </div>
@@ -400,9 +400,9 @@ function RuleModal({
               </div>
             );
           })()}
-          <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
-            <div className="mb-0.5 text-[10px] uppercase tracking-wider text-white/35">Rule summary</div>
-            <p className="text-xs leading-relaxed text-white/70">{describeRule(form)}</p>
+          <div className="rounded-lg border border-border bg-surface-card px-3 py-2">
+            <div className="mb-0.5 text-[10px] uppercase tracking-wider text-text-muted">Rule summary</div>
+            <p className="text-xs leading-relaxed text-text-secondary">{describeRule(form)}</p>
           </div>
           <div>
             <label className={label}>Severity</label>
@@ -411,11 +411,11 @@ function RuleModal({
                 <button type="button" key={sv} onClick={() => set("severity", sv)}
                   className={`flex-1 rounded-lg border px-3 py-1.5 text-xs capitalize transition ${
                     form.severity === sv
-                      ? sv === "critical" ? "border-rose-500/50 bg-rose-500/15 text-rose-200"
-                        : sv === "high" ? "border-orange-500/50 bg-orange-500/15 text-orange-200"
-                        : sv === "warning" ? "border-amber-400/50 bg-amber-400/15 text-amber-200"
-                        : "border-sky-400/50 bg-sky-400/15 text-sky-200"
-                      : "border-white/10 text-white/50 hover:text-white"
+                      ? sv === "critical" ? "border-status-critical/50 bg-status-critical/15 text-status-critical"
+                        : sv === "high" ? "border-status-critical/50 bg-status-critical/15 text-status-critical"
+                        : sv === "warning" ? "border-status-warning/50 bg-status-warning/15 text-status-warning"
+                        : "border-status-info/50 bg-status-info/15 text-status-info"
+                      : "border-border text-text-secondary hover:text-text-primary"
                   }`}>
                   {sv}
                 </button>
@@ -425,7 +425,7 @@ function RuleModal({
           <div>
             <label className={label}>Notify (notifications)</label>
             {channels.length === 0 ? (
-              <p className="text-xs text-amber-300/80">No notifications yet. Add them under Manage &rarr; Notifications.</p>
+              <p className="text-xs text-status-warning/80">No notifications yet. Add them under Manage &rarr; Notifications.</p>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {channels.map((ch) => {
@@ -437,7 +437,7 @@ function RuleModal({
                         const next = on ? selected.filter((x) => x !== ch.id) : [...selected, ch.id];
                         set("channel_ids", next.join(",") || null);
                       }}
-                      className={`rounded-lg border px-2.5 py-1 text-xs transition ${on ? "border-violet-400/50 bg-violet-500/20 text-violet-100" : "border-white/10 text-white/50 hover:text-white"}`}>
+                      className={`rounded-lg border px-2.5 py-1 text-xs transition ${on ? "border-accent/50 bg-accent/20 text-accent" : "border-border text-text-secondary hover:text-text-primary"}`}>
                       {ch.name} <span className="opacity-50">({ch.kind})</span>
                     </button>
                   );
@@ -445,16 +445,16 @@ function RuleModal({
               </div>
             )}
           </div>
-          <label className="flex items-center gap-2 text-sm text-white/70">
+          <label className="flex items-center gap-2 text-sm text-text-secondary">
             <input type="checkbox" checked={form.enabled} onChange={(e) => set("enabled", e.target.checked)} />
             Enabled
           </label>
         </div>
 
         <div className="mt-5 flex justify-end gap-2">
-          <button onClick={onClose} className="rounded-lg border border-white/10 px-4 py-2 text-sm text-white/60 hover:text-white">Cancel</button>
+          <button onClick={onClose} className="rounded-lg border border-border px-4 py-2 text-sm text-text-secondary hover:text-text-primary">Cancel</button>
           <button onClick={save} disabled={saving || !form.name.trim()}
-            className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black hover:bg-white/90 disabled:opacity-40">
+            className="rounded-lg bg-surface-card px-4 py-2 text-sm font-medium text-text-primary hover:bg-surface-hover disabled:opacity-40">
             {saving ? "Saving…" : "Save rule"}
           </button>
         </div>
@@ -536,18 +536,18 @@ export default function AlertsPage() {
 
   return (
     <Shell>
-      <div className="mb-6 overflow-hidden rounded-xl border border-white/10 bg-gradient-to-b from-white/[0.04] to-transparent">
-        <div className="flex items-center justify-between border-b border-white/10 px-5 py-3">
+      <div className="mb-6 overflow-hidden rounded-xl border border-border bg-surface-card">
+        <div className="flex items-center justify-between border-b border-border px-5 py-3">
           <div className="flex items-center gap-2">
             <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400/60" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-rose-500" />
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-status-critical/60" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-status-critical" />
             </span>
-            <h1 className="text-sm font-semibold uppercase tracking-wider text-white/80">Alert Operations Center</h1>
+            <h1 className="text-sm font-semibold uppercase tracking-wider text-text-primary">Alert Operations Center</h1>
           </div>
           <RangePicker value={minutes} onChange={setMinutes} />
         </div>
-        <div className="grid grid-cols-4 gap-px bg-white/5 sm:grid-cols-7">
+        <div className="grid grid-cols-4 gap-px bg-border sm:grid-cols-7">
           <KpiCell label="Critical" value={sum.critical} tone="critical" active={alertFilter === "critical"} onClick={() => setAlertFilter(alertFilter === "critical" ? "all" : "critical")} />
           <KpiCell label="High" value={sum.high} tone="high" active={alertFilter === "high"} onClick={() => setAlertFilter(alertFilter === "high" ? "all" : "high")} />
           <KpiCell label="Warning" value={sum.warning} tone="warning" active={alertFilter === "warning"} onClick={() => setAlertFilter(alertFilter === "warning" ? "all" : "warning")} />
@@ -563,16 +563,16 @@ export default function AlertsPage() {
       <div className="mb-5 flex items-start justify-between">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Alert rules</h1>
-          <p className="text-sm text-white/40">
+          <p className="text-sm text-text-muted">
             {rules.length} rule{rules.length === 1 ? "" : "s"} · {enabledCount} enabled
-            {firingCount > 0 && <span className="text-rose-300"> · {firingCount} active</span>}
+            {firingCount > 0 && <span className="text-status-critical"> · {firingCount} active</span>}
           </p>
         </div>
         {canOperate(role) && <button onClick={() => setModal({ open: true, rule: null })}
-          className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black hover:bg-white/90">+ New rule</button>}
+          className="rounded-lg bg-surface-card px-4 py-2 text-sm font-medium text-text-primary hover:bg-surface-hover">+ New rule</button>}
       </div>
 
-      {err && <p className="mb-4 rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-300">{err}</p>}
+      {err && <p className="mb-4 rounded-lg border border-status-critical/30 bg-status-critical/10 p-3 text-sm text-status-critical">{err}</p>}
 
       <div className="space-y-2">
         {rules.map((r) => {
@@ -580,31 +580,31 @@ export default function AlertsPage() {
           const hasChannels = !!(r.channel_ids && r.channel_ids.trim()) || !!(r.webhook_urls && r.webhook_urls.trim());
           return (
             <div key={r.id}
-              className={`flex items-stretch overflow-hidden rounded-xl border ${r.is_firing ? "border-rose-500/40" : "border-white/10"} bg-white/[0.02]`}>
-              <span className={`w-1 shrink-0 ${r.enabled ? m.bar : "bg-white/10"}`} />
+              className={`flex items-stretch overflow-hidden rounded-xl border ${r.is_firing ? "border-status-critical/40" : "border-border"} bg-surface-card`}>
+              <span className={`w-1 shrink-0 ${r.enabled ? m.bar : "bg-surface-hover"}`} />
               <div className="flex flex-1 flex-wrap items-center gap-4 px-4 py-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${m.bg} ${m.text}`}>
                       <span className={`h-1.5 w-1.5 rounded-full ${m.dot}`} />{m.label}
                     </span>
-                    <span className="font-medium text-white/90">{r.name}</span>
+                    <span className="font-medium text-text-primary">{r.name}</span>
                     {r.is_firing ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] text-rose-300">
-                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rose-400" />active
+                      <span className="inline-flex items-center gap-1 rounded-full bg-status-critical/15 px-2 py-0.5 text-[10px] text-status-critical">
+                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-status-critical" />active
                       </span>
                     ) : r.enabled ? (
-                      <span className="rounded-full bg-emerald-500/12 px-2 py-0.5 text-[10px] text-emerald-300/90">ok</span>
+                      <span className="rounded-full bg-status-healthy/12 px-2 py-0.5 text-[10px] text-status-healthy/90">ok</span>
                     ) : null}
                   </div>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/50">
-                    <span className="text-white/70">{conditionText(r)}</span>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text-secondary">
+                    <span className="text-text-secondary">{conditionText(r)}</span>
                     <span>·</span>
                     <span>{r.service ?? "all services"}</span>
                     <span>·</span>
                     <span>for {r.for_minutes}m</span>
                     <span>·</span>
-                    <span className={hasChannels ? "text-white/50" : "text-amber-300/80"}>
+                    <span className={hasChannels ? "text-text-secondary" : "text-status-warning/80"}>
                       {hasChannels ? "notifies" : "no notifications"}
                     </span>
                     {typeof r.incident_count === "number" && r.incident_count > 0 && (
@@ -617,20 +617,20 @@ export default function AlertsPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   {canOperate(role) && <button onClick={() => toggle(r)}
-                    className={`rounded-full px-2.5 py-1 text-xs transition ${r.enabled ? "bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25" : "bg-white/10 text-white/40 hover:bg-white/15"}`}>
+                    className={`rounded-full px-2.5 py-1 text-xs transition ${r.enabled ? "bg-status-healthy/15 text-status-healthy hover:bg-status-healthy/25" : "bg-surface-hover text-text-muted hover:bg-surface-hover"}`}>
                     {r.enabled ? "enabled" : "disabled"}
                   </button>}
                   {canOperate(role) && <button onClick={() => setModal({ open: true, rule: r })}
-                    className="rounded-lg border border-white/10 px-2.5 py-1 text-xs text-white/60 hover:bg-white/5">Edit</button>}
+                    className="rounded-lg border border-border px-2.5 py-1 text-xs text-text-secondary hover:bg-surface-elevated">Edit</button>}
                   {canManage(role) && <button onClick={() => remove(r)}
-                    className="rounded-lg border border-rose-400/30 px-2.5 py-1 text-xs text-rose-300 hover:bg-rose-500/10">Delete</button>}
+                    className="rounded-lg border border-status-critical/30 px-2.5 py-1 text-xs text-status-critical hover:bg-status-critical/10">Delete</button>}
                 </div>
               </div>
             </div>
           );
         })}
         {rules.length === 0 && (
-          <div className="rounded-xl border border-white/10 bg-white/[0.02] py-10 text-center text-sm text-white/40">
+          <div className="rounded-xl border border-border bg-surface-card py-10 text-center text-sm text-text-muted">
             No rules yet. Create one to start alerting.
           </div>
         )}
@@ -653,17 +653,17 @@ function AlertStat({ label, value, tone, active, onClick, href }: {
   active?: boolean; onClick?: () => void; href?: string;
 }) {
   const toneCls =
-    tone === "critical" ? "border-rose-500/30 text-rose-300"
-    : tone === "warning" ? "border-amber-400/30 text-amber-300"
-    : tone === "info" ? "border-sky-400/30 text-sky-300"
-    : tone === "ack" ? "border-violet-400/30 text-violet-300"
-    : tone === "resolved" ? "border-emerald-400/30 text-emerald-300"
-    : "border-white/15 text-white/70";
-  const cls = `block rounded-xl border bg-white/[0.02] px-4 py-3 text-left transition hover:bg-white/[0.05] ${toneCls} ${active ? "ring-2 ring-white/30" : ""}`;
+    tone === "critical" ? "border-status-critical/30 text-status-critical"
+    : tone === "warning" ? "border-status-warning/30 text-status-warning"
+    : tone === "info" ? "border-status-info/30 text-status-info"
+    : tone === "ack" ? "border-accent/30 text-accent"
+    : tone === "resolved" ? "border-status-healthy/30 text-status-healthy"
+    : "border-border text-text-secondary";
+  const cls = `block rounded-xl border bg-surface-card px-4 py-3 text-left transition hover:bg-surface-elevated ${toneCls} ${active ? "ring-2 ring-accent" : ""}`;
   const inner = (
     <>
       <div className="text-2xl font-semibold tabular-nums">{value}</div>
-      <div className="mt-0.5 text-xs text-white/45">{label}</div>
+      <div className="mt-0.5 text-xs text-text-muted">{label}</div>
     </>
   );
   if (href) return <Link href={href} className={cls}>{inner}</Link>;

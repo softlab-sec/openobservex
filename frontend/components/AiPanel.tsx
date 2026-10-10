@@ -15,7 +15,7 @@ export function AiButton({
     <button
       onClick={onClick}
       disabled={loading}
-      className="rounded-lg border border-violet-400/40 bg-violet-500/15 px-3 py-1.5 text-xs font-medium text-violet-200 transition hover:bg-violet-500/25 disabled:opacity-50"
+      className="rounded-lg border border-accent/40 bg-accent/15 px-3 py-1.5 text-xs font-medium text-accent transition hover:bg-accent/25 disabled:opacity-50"
     >
       {loading ? "Analyzing..." : label}
     </button>
@@ -23,30 +23,30 @@ export function AiButton({
 }
 
 const CONF = {
-  high: "bg-emerald-500/15 text-emerald-300",
-  medium: "bg-amber-500/15 text-amber-300",
-  low: "bg-white/10 text-white/60",
+  high: "bg-status-healthy/15 text-status-healthy",
+  medium: "bg-status-warning/15 text-status-warning",
+  low: "bg-surface-hover text-text-secondary",
 };
 
 const VERDICT: Record<string, { chip: string; card: string; label: string }> = {
   healthy: {
-    chip: "bg-emerald-500/15 text-emerald-300",
-    card: "border-emerald-400/25 bg-emerald-500/[0.06]",
+    chip: "bg-status-healthy/15 text-status-healthy",
+    card: "border-status-healthy/25 bg-status-healthy/[0.06]",
     label: "healthy",
   },
   degraded: {
-    chip: "bg-amber-500/15 text-amber-300",
-    card: "border-amber-400/25 bg-amber-500/[0.06]",
+    chip: "bg-status-warning/15 text-status-warning",
+    card: "border-status-warning/25 bg-status-warning/[0.06]",
     label: "degraded",
   },
   failed: {
-    chip: "bg-red-500/15 text-red-300",
-    card: "border-red-400/25 bg-red-500/[0.06]",
+    chip: "bg-status-critical/15 text-status-critical",
+    card: "border-status-critical/25 bg-status-critical/[0.06]",
     label: "failed",
   },
   critical: {
-    chip: "bg-red-500/15 text-red-300",
-    card: "border-red-400/25 bg-red-500/[0.06]",
+    chip: "bg-status-critical/15 text-status-critical",
+    card: "border-status-critical/25 bg-status-critical/[0.06]",
     label: "critical",
   },
 };
@@ -74,7 +74,7 @@ export function AiResult({
 
   return (
     <Card
-      className={`mb-4 ${v ? v.card : "border-violet-400/25 bg-violet-500/[0.06]"}`}
+      className={`mb-4 ${v ? v.card : "border-accent/25 bg-accent/[0.06]"}`}
     >
       <div className="mb-3 flex items-start justify-between gap-4">
         <div>
@@ -91,11 +91,11 @@ export function AiResult({
               </span>
             )}
           </div>
-          <p className="mt-1 max-w-4xl text-sm text-white/80">{headline}</p>
+          <p className="mt-1 max-w-4xl text-sm text-text-secondary">{headline}</p>
         </div>
         <button
           onClick={onClose}
-          className="shrink-0 rounded-lg border border-white/10 px-2 py-1 text-xs text-white/60 hover:bg-white/5"
+          className="shrink-0 rounded-lg border border-border px-2 py-1 text-xs text-text-secondary hover:bg-surface-elevated"
         >
           Close
         </button>
@@ -105,19 +105,19 @@ export function AiResult({
         <div className="grid gap-4 sm:grid-cols-2">
           {shown.map((sec) => (
             <div key={sec.label}>
-              <div className="mb-1 text-xs uppercase tracking-wider text-white/40">
+              <div className="mb-1 text-xs uppercase tracking-wider text-text-muted">
                 {sec.label}
               </div>
-              <ul className="space-y-1 text-sm text-white/70">
+              <ul className="space-y-1 text-sm text-text-secondary">
                 {sec.items.filter(Boolean).length ? (
                   sec.items.filter(Boolean).map((it, i) => (
                     <li key={i} className="flex gap-2">
-                      <span className="text-white/25">•</span>
+                      <span className="text-text-muted">•</span>
                       <span>{it}</span>
                     </li>
                   ))
                 ) : (
-                  <li className="text-white/30">none</li>
+                  <li className="text-text-muted">none</li>
                 )}
               </ul>
             </div>
@@ -125,7 +125,7 @@ export function AiResult({
         </div>
       )}
 
-      <p className="mt-4 text-[11px] text-white/30">
+      <p className="mt-4 text-[11px] text-text-muted">
         Generated locally by a language model from the telemetry above. Treat it as
         a starting hypothesis, not a verdict.
       </p>

@@ -36,9 +36,9 @@ type NodeData = {
 };
 
 const HEALTH_RING = {
-  failing: { ring: "#f87171", glow: "rgba(248,113,113,0.55)", text: "text-red-300" },
-  degraded: { ring: "#fbbf24", glow: "rgba(251,191,36,0.4)", text: "text-amber-300" },
-  healthy: { ring: "#34d399", glow: "rgba(52,211,153,0.35)", text: "text-emerald-300" },
+  failing: { ring: "var(--color-status-critical)", glow: "rgba(248,113,113,0.55)", text: "text-status-critical" },
+  degraded: { ring: "var(--color-status-warning)", glow: "rgba(251,191,36,0.4)", text: "text-status-warning" },
+  healthy: { ring: "var(--color-status-healthy)", glow: "rgba(52,211,153,0.35)", text: "text-status-healthy" },
 };
 
 function ServiceNode({ data }: { data: NodeData }) {
@@ -47,7 +47,7 @@ function ServiceNode({ data }: { data: NodeData }) {
   const isRoot = data.isRoot ?? false;
   const dim = data.dim ?? false;
   const isFocus = data.isFocus ?? false;
-  const hr = isRoot ? { ring: "#38bdf8", glow: "rgba(56,189,248,0.35)", text: "text-sky-300" } : HEALTH_RING[health];
+  const hr = isRoot ? { ring: "var(--color-accent)", glow: "rgba(56,189,248,0.35)", text: "text-status-info" } : HEALTH_RING[health];
   const dia = isFocus ? 74 : 60;
   return (
     <div
@@ -57,47 +57,47 @@ function ServiceNode({ data }: { data: NodeData }) {
       onMouseLeave={() => setHover(false)}
       onClick={() => data.onOpen(data.label)}
     >
-      <Handle type="target" position={Position.Left} className="!h-1.5 !w-1.5 !min-w-0 !border-0 !bg-white/40" style={{ left: -2 }} />
+      <Handle type="target" position={Position.Left} className="!h-1.5 !w-1.5 !min-w-0 !border-0 !bg-surface-hover" style={{ left: -2 }} />
       <div
         className="flex cursor-pointer items-center justify-center rounded-full transition"
         style={{
           width: dia,
           height: dia,
-          background: "#0f1622",
+          background: "#FFFFFF",
           border: `${isFocus ? 4 : 3}px solid ${hr.ring}`,
           boxShadow: `0 0 ${isFocus ? 28 : 14}px -4px ${hr.glow}${isFocus ? ", 0 0 0 4px rgba(56,189,248,0.25)" : ""}`,
         }}
       >
-        <span className="text-xs font-bold text-white">
-          {!isRoot && data.nodeErrorPct > 0 ? `${data.nodeErrorPct}%` : ""}
+        <span className="text-xs font-bold text-text-primary">
+          {isRoot ? data.calls.toLocaleString() : data.nodeErrorPct > 0 ? `${data.nodeErrorPct}%` : `${data.p95_ms}ms`}
         </span>
       </div>
       <div className="absolute left-1/2 top-full mt-1.5 w-[170px] -translate-x-1/2 text-center pointer-events-none">
-        <div className="truncate text-sm font-bold text-white">{data.label}</div>
-        <div className={`text-[12px] font-medium ${isRoot ? "text-sky-300/70" : data.nodeErrorPct > 0 ? hr.text : "text-white/50"}`}>
+        <div className="truncate text-sm font-bold text-text-primary">{data.label}</div>
+        <div className={`text-[12px] font-medium ${isRoot ? "text-status-info/70" : data.nodeErrorPct > 0 ? hr.text : "text-text-muted"}`}>
           {isRoot ? `entry · ${data.calls.toLocaleString()} calls` : `${data.calls.toLocaleString()} calls · p95 ${data.p95_ms}ms`}
         </div>
       </div>
-      <Handle type="source" position={Position.Right} className="!h-1.5 !w-1.5 !min-w-0 !border-0 !bg-white/40" style={{ right: -2 }} />
+      <Handle type="source" position={Position.Right} className="!h-1.5 !w-1.5 !min-w-0 !border-0 !bg-surface-hover" style={{ right: -2 }} />
 
       <NodeToolbar isVisible={hover} position={data.flipUp ? Position.Top : Position.Bottom} offset={12}>
-        <div className="w-64 rounded-xl border border-white/20 bg-[#0b0f17] p-3 text-left shadow-2xl">
+        <div className="w-64 rounded-xl border border-border bg-surface-card p-3 text-left shadow-2xl">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <span className="truncate text-sm font-bold text-white">{data.label}</span>
+            <span className="truncate text-sm font-bold text-text-primary">{data.label}</span>
             <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
-              isRoot ? "bg-sky-500/15 text-sky-300"
-              : health === "failing" ? "bg-red-500/15 text-red-300"
-              : health === "degraded" ? "bg-amber-500/15 text-amber-300"
-              : "bg-emerald-500/15 text-emerald-300"}`}>
+              isRoot ? "bg-status-info/15 text-status-info"
+              : health === "failing" ? "bg-status-critical/15 text-status-critical"
+              : health === "degraded" ? "bg-status-warning/15 text-status-warning"
+              : "bg-status-healthy/15 text-status-healthy"}`}>
               {isRoot ? "Entry point" : health === "failing" ? "Failing" : health === "degraded" ? "Degraded" : "Healthy"}
             </span>
           </div>
           <div className="space-y-1 text-xs">
-            <div className="flex justify-between"><span className="text-white/40">Calls</span><span className="text-white/70">{data.calls.toLocaleString()}</span></div>
-            <div className="flex justify-between"><span className="text-white/40">Error rate</span><span className={data.nodeErrorPct > 0 ? hr.text : "text-white/70"}>{data.nodeErrorPct}%</span></div>
-            <div className="flex justify-between"><span className="text-white/40">Latency</span><span className="text-white/70">{data.p95_ms}ms</span></div>
+            <div className="flex justify-between"><span className="text-text-muted">Calls</span><span className="text-text-secondary">{data.calls.toLocaleString()}</span></div>
+            <div className="flex justify-between"><span className="text-text-muted">Error rate</span><span className={data.nodeErrorPct > 0 ? hr.text : "text-text-secondary"}>{data.nodeErrorPct}%</span></div>
+            <div className="flex justify-between"><span className="text-text-muted">Latency</span><span className="text-text-secondary">{data.p95_ms}ms</span></div>
           </div>
-          <div className="mt-2 border-t border-white/10 pt-1.5 text-center text-[11px] text-white/35">click for detail</div>
+          <div className="mt-2 border-t border-border pt-1.5 text-center text-[11px] text-text-muted">click for detail</div>
         </div>
       </NodeToolbar>
     </div>
@@ -130,7 +130,7 @@ function DetailPanel({
   onClose: () => void;
 }) {
   return (
-    <div className="absolute right-0 top-0 z-20 h-full w-96 overflow-y-auto border-l border-white/10 bg-[#0d1219] p-5 shadow-2xl">
+    <div className="absolute right-0 top-0 z-20 h-full w-96 overflow-y-auto border-l border-border bg-surface-card p-5 shadow-2xl">
       <div className="mb-4 flex items-start justify-between">
         <div className="flex items-center gap-2">
           {detail && (
@@ -145,13 +145,13 @@ function DetailPanel({
         </div>
         <button
           onClick={onClose}
-          className="rounded-lg border border-white/10 px-2 py-1 text-xs text-white/60 hover:bg-white/5"
+          className="rounded-lg border border-border px-2 py-1 text-xs text-text-secondary hover:bg-surface-elevated"
         >
           Close
         </button>
       </div>
 
-      {loading && <p className="text-sm text-white/40">Loading detail...</p>}
+      {loading && <p className="text-sm text-text-muted">Loading detail...</p>}
 
       {detail && !loading && (
         <>
@@ -166,9 +166,9 @@ function DetailPanel({
             ].map(([label, val]) => (
               <div
                 key={label as string}
-                className="rounded-lg border border-white/10 bg-white/[0.03] p-2"
+                className="rounded-lg border border-border bg-surface-elevated p-2"
               >
-                <div className="text-[10px] uppercase tracking-wider text-white/40">
+                <div className="text-[10px] uppercase tracking-wider text-text-muted">
                   {label}
                 </div>
                 <div className="text-sm font-semibold tabular-nums">{val}</div>
@@ -214,7 +214,7 @@ function DetailPanel({
 
           <Link
             href={`/traces?service=${encodeURIComponent(detail.service)}`}
-            className="mt-4 block rounded-lg border border-sky-400/40 bg-sky-500/15 px-3 py-2 text-center text-sm text-sky-200 hover:bg-sky-500/25"
+            className="mt-4 block rounded-lg border border-status-info/40 bg-status-info/15 px-3 py-2 text-center text-sm text-status-info hover:bg-status-info/25"
           >
             View traces for {detail.service}
           </Link>
@@ -227,7 +227,7 @@ function DetailPanel({
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="mb-4">
-      <div className="mb-1 text-xs uppercase tracking-wider text-white/40">
+      <div className="mb-1 text-xs uppercase tracking-wider text-text-muted">
         {title}
       </div>
       <div className="space-y-1">{children}</div>
@@ -236,16 +236,16 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 function Row({ left, right, bad }: { left: string; right: string; bad?: boolean }) {
   return (
-    <div className="flex items-center justify-between rounded-lg bg-white/[0.02] px-2 py-1.5 text-sm">
-      <span className={`truncate ${bad ? "text-red-300" : "text-white/80"}`}>
+    <div className="flex items-center justify-between rounded-lg bg-surface-elevated px-2 py-1.5 text-sm">
+      <span className={`truncate ${bad ? "text-status-critical" : "text-text-secondary"}`}>
         {left}
       </span>
-      <span className="shrink-0 pl-2 tabular-nums text-white/45">{right}</span>
+      <span className="shrink-0 pl-2 tabular-nums text-text-muted">{right}</span>
     </div>
   );
 }
 function Empty({ children }: { children: React.ReactNode }) {
-  return <div className="px-2 py-1 text-sm text-white/30">{children}</div>;
+  return <div className="px-2 py-1 text-sm text-text-muted">{children}</div>;
 }
 
 function ServiceMapInner() {
@@ -294,12 +294,12 @@ function ServiceMapInner() {
         }
         setEmpty(false);
 
-        const calls: Record<string, number> = {};
+        const calls: Record<string, number> = {}; const out: Record<string, number> = {}; const outP95: Record<string, number> = {};
         const errs: Record<string, number> = {};
         data.edges.forEach((e) => {
           calls[e.target] = (calls[e.target] ?? 0) + e.calls;
           errs[e.target] = (errs[e.target] ?? 0) + e.errors;
-          calls[e.source] = calls[e.source] ?? 0;
+          calls[e.source] = calls[e.source] ?? 0; out[e.source] = (out[e.source] ?? 0) + e.calls; outP95[e.source] = Math.max(outP95[e.source] ?? 0, e.p95_ms ?? 0);
         });
 
         const nodeById: Record<string, typeof data.nodes[number]> = {};
@@ -330,7 +330,7 @@ function ServiceMapInner() {
         const ys = placed.map((pl) => pl.y);
         const midY = ys.length ? (Math.min(...ys) + Math.max(...ys)) / 2 : 0;
         const rn: Node[] = placed.map((p) => {
-          const c = calls[p.id] ?? 0;
+          const c = calls[p.id] || out[p.id] || 0;
           const e = errs[p.id] ?? 0;
           return {
             id: p.id,
@@ -342,7 +342,7 @@ function ServiceMapInner() {
               calls: c,
               errorRate: c ? Math.round((e / c) * 1000) / 10 : 0,
               health: nodeById[p.id]?.health ?? "healthy",
-              p95_ms: nodeById[p.id]?.p95_ms ?? 0,
+              p95_ms: nodeById[p.id]?.p95_ms || outP95[p.id] || 0,
               nodeErrorPct: nodeById[p.id]?.error_pct ?? 0,
               isRoot: (nodeById[p.id]?.calls ?? 0) === 0 || !data.edges.some((ed) => ed.target === p.id),
               isFocus: focus === p.id,
@@ -357,7 +357,7 @@ function ServiceMapInner() {
           const ep = e.error_pct ?? 0;
           const failing = ep >= 5;
           const degraded = ep >= 1 && ep < 5;
-          const stroke = failing ? "#f87171" : degraded ? "#fbbf24" : "#38bdf8";
+          const stroke = failing ? "var(--color-status-critical)" : degraded ? "var(--color-status-warning)" : "var(--color-accent)";
           const edgeDim = focus ? !(inBlast.has(e.source) && inBlast.has(e.target)) : false;
           return {
             id: `e${i}`,
@@ -365,8 +365,8 @@ function ServiceMapInner() {
             target: e.target,
             animated: failing,
             label: ep > 0 ? `${e.calls} · ${ep}% err · p95 ${e.p95_ms}ms` : `${e.calls} · p95 ${e.p95_ms}ms`,
-            labelStyle: { fill: "#ffffff70", fontSize: 10 },
-            labelBgStyle: { fill: "#0b0f17", fillOpacity: 0.85 },
+            labelStyle: { fill: "var(--color-text-secondary)", fontSize: 10 },
+            labelBgStyle: { fill: "var(--color-surface-card)", fillOpacity: 0.85 },
             labelBgPadding: [4, 2] as [number, number],
             labelBgBorderRadius: 4,
             type: "default",
@@ -408,7 +408,7 @@ function ServiceMapInner() {
         maxZoom={2}
       >
         <Background color="#ffffff10" gap={22} />
-        <Controls className="!bg-black/70 !border-white/20 [&_button]:!bg-black/60 [&_button]:!border-white/15 [&_button:hover]:!bg-white/10 [&_button]:!fill-white/80" />
+        <Controls className="!bg-surface-elevated !border-border [&_button]:!bg-surface-elevated [&_button]:!border-border [&_button:hover]:!bg-surface-hover [&_button]:!fill-text-secondary" />
       </ReactFlow>
     ),
     [nodes, edges]
@@ -417,20 +417,20 @@ function ServiceMapInner() {
   return (
     <Shell>
       {focus && (
-        <div className="mb-4 flex items-center justify-between rounded-xl border border-rose-400/25 bg-rose-500/[0.06] px-4 py-3">
+        <div className="mb-4 flex items-center justify-between rounded-xl border border-status-critical/25 bg-status-critical/[0.06] px-4 py-3">
           <div className="flex items-center gap-2">
             <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400/60" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-rose-500" />
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-status-critical/60" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-status-critical" />
             </span>
-            <span className="text-sm text-white/85">
-              Blast radius for <span className="font-semibold text-rose-200">{focus}</span>
-              <span className="text-white/40"> · incident context</span>
+            <span className="text-sm text-text-secondary">
+              Blast radius for <span className="font-semibold text-status-critical">{focus}</span>
+              <span className="text-text-muted"> · incident context</span>
             </span>
           </div>
           {fromIncident && (
             <a href={`/incidents/${fromIncident}`}
-              className="inline-flex items-center gap-1 rounded-lg border border-white/15 px-3 py-1 text-xs text-white/70 transition hover:bg-white/[0.06]">
+              className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-1 text-xs text-text-secondary transition hover:bg-surface-elevated">
               <span>←</span> Back to incident
             </a>
           )}
@@ -439,7 +439,7 @@ function ServiceMapInner() {
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Service map</h1>
-          <p className="text-sm text-white/40">
+          <p className="text-sm text-text-muted">
             Dependencies inferred from traces. Click a node to drill in.
           </p>
         </div>
@@ -447,7 +447,7 @@ function ServiceMapInner() {
           <select
             value={app}
             onChange={(e) => setApp(e.target.value)}
-            className="rounded-lg border border-white/10 bg-black/30 px-3 py-1.5 text-sm outline-none focus:border-white/40"
+            className="rounded-lg border border-border bg-surface-elevated px-3 py-1.5 text-sm outline-none focus:border-border"
           >
             <option value="all">All applications</option>
             {apps.map((a) => (
@@ -461,17 +461,17 @@ function ServiceMapInner() {
       </div>
 
       {err && (
-        <p className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">
+        <p className="mb-4 rounded-lg border border-status-critical/30 bg-status-critical/10 p-3 text-sm text-status-critical">
           {err}
         </p>
       )}
 
       <div
-        className="relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.02]"
+        className="relative overflow-hidden rounded-xl border border-border bg-surface-elevated"
         style={{ height: "calc(100vh - 150px)" }}
       >
         {empty ? (
-          <div className="flex h-full items-center justify-center text-sm text-white/30">
+          <div className="flex h-full items-center justify-center text-sm text-text-muted">
             No service-to-service calls in this window
           </div>
         ) : (
@@ -494,7 +494,7 @@ function ServiceMapInner() {
 
 export default function ServiceMapPage() {
   return (
-    <Suspense fallback={<Shell><p className="text-sm text-white/40">Loading map…</p></Shell>}>
+    <Suspense fallback={<Shell><p className="text-sm text-text-muted">Loading map…</p></Shell>}>
       <ServiceMapInner />
     </Suspense>
   );

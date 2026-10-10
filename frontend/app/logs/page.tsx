@@ -59,7 +59,7 @@ export default function LogsPage() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Logs</h1>
-          <p className="text-sm text-white/40">Filter by severity, search message text</p>
+          <p className="text-sm text-text-muted">Filter by severity, search message text</p>
         </div>
         <RangePicker value={minutes} onChange={setMinutes} />
       </div>
@@ -71,13 +71,13 @@ export default function LogsPage() {
             onClick={() => toggle(l)}
             className={`rounded-lg border px-2.5 py-1 text-xs transition ${
               levels.includes(l)
-                ? "border-white/30 bg-white/10 text-white"
-                : "border-white/10 text-white/50 hover:text-white"
+                ? "border-border bg-surface-hover text-text-primary"
+                : "border-border text-text-muted hover:text-text-primary"
             }`}
           >
             {l}
             {counts[l] !== undefined && (
-              <span className="ml-1.5 text-white/30">{counts[l]}</span>
+              <span className="ml-1.5 text-text-muted">{counts[l]}</span>
             )}
           </button>
         ))}
@@ -88,7 +88,7 @@ export default function LogsPage() {
             if (e.key === "Enter") setQuery(search);
           }}
           placeholder="Search message text, press Enter"
-          className="ml-auto w-72 rounded-lg border border-white/10 bg-black/30 px-3 py-1.5 text-sm outline-none focus:border-white/30"
+          className="ml-auto w-72 rounded-lg border border-border bg-surface-elevated px-3 py-1.5 text-sm outline-none focus:border-border"
         />
         {query && (
           <button
@@ -96,7 +96,7 @@ export default function LogsPage() {
               setSearch("");
               setQuery("");
             }}
-            className="rounded-lg border border-white/10 px-2 py-1 text-xs text-white/50 hover:text-white"
+            className="rounded-lg border border-border px-2 py-1 text-xs text-text-muted hover:text-text-primary"
           >
             Clear
           </button>
@@ -104,24 +104,24 @@ export default function LogsPage() {
       </div>
 
       {err && (
-        <p className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">
+        <p className="mb-4 rounded-lg border border-status-critical/30 bg-status-critical/10 p-3 text-sm text-status-critical">
           {err}
         </p>
       )}
 
       {trace && (
-        <Card className="mb-4 border-white/20 bg-white/[0.05]">
+        <Card className="mb-4 border-border bg-surface-elevated">
           <div className="mb-4 flex items-center justify-between">
             <div>
               <div className="text-base font-semibold">Correlated trace</div>
-              <div className="font-mono text-xs text-white/40">
+              <div className="font-mono text-xs text-text-muted">
                 {trace.trace_id} · {trace.span_count} spans ·{" "}
                 {trace.total_ms.toFixed(2)} ms
               </div>
             </div>
             <button
               onClick={() => setTrace(null)}
-              className="rounded-lg border border-white/10 px-2 py-1 text-xs text-white/60 hover:bg-white/5"
+              className="rounded-lg border border-border px-2 py-1 text-xs text-text-secondary hover:bg-surface-elevated"
             >
               Close
             </button>
@@ -130,53 +130,53 @@ export default function LogsPage() {
         </Card>
       )}
 
-      <div className="overflow-hidden rounded-xl border border-white/10 bg-black/20">
-        <div className="divide-y divide-white/5 font-mono text-[13px] leading-relaxed">
+      <div className="overflow-hidden rounded-xl border border-border bg-surface-elevated">
+        <div className="divide-y divide-border font-mono text-[13px] leading-relaxed">
           {rows.map((r, i) => {
             const lvl = r.SeverityText.toUpperCase();
             const accent =
               lvl === "ERROR"
-                ? "border-l-red-500/70 bg-red-500/[0.04]"
+                ? "border-l-red-500/70 bg-status-critical/[0.04]"
                 : lvl === "WARN" || lvl === "WARNING"
-                  ? "border-l-amber-500/70 bg-amber-500/[0.03]"
+                  ? "border-l-amber-500/70 bg-status-warning/[0.03]"
                   : "border-l-sky-500/40";
             const isOpen = expanded === i;
             const correlated = trace && trace.trace_id === r.TraceId;
             return (
-              <div key={i} className={`border-l-2 ${accent} ${correlated ? "ring-1 ring-inset ring-sky-500/40" : ""}`}>
+              <div key={i} className={`border-l-2 ${accent} ${correlated ? "ring-1 ring-inset ring-status-info/40" : ""}`}>
                 <button
                   onClick={() => setExpanded(isOpen ? null : i)}
-                  className="flex w-full items-baseline gap-3 px-3 py-1.5 text-left transition hover:bg-white/[0.03]"
+                  className="flex w-full items-baseline gap-3 px-3 py-1.5 text-left transition hover:bg-surface-elevated"
                 >
-                  <span className="shrink-0 tabular-nums text-white/35">
+                  <span className="shrink-0 tabular-nums text-text-muted">
                     {new Date(r.Timestamp).toLocaleTimeString([], { hour12: false })}
                   </span>
                   <span className="shrink-0">
                     <SeverityBadge level={r.SeverityText} />
                   </span>
-                  <span className="shrink-0 text-white/45">{r.ServiceName}</span>
-                  <span className="flex-1 truncate text-white/85">{r.Body}</span>
+                  <span className="shrink-0 text-text-muted">{r.ServiceName}</span>
+                  <span className="flex-1 truncate text-text-primary">{r.Body}</span>
                   {r.TraceId && (
-                    <span className="shrink-0 text-[10px] text-sky-400/50" title="has correlated trace">trace</span>
+                    <span className="shrink-0 text-[10px] text-accent" title="has correlated trace">trace</span>
                   )}
                 </button>
                 {isOpen && (
-                  <div className="space-y-2 border-t border-white/5 bg-black/30 px-3 py-3 text-xs">
-                    <div className="whitespace-pre-wrap break-words text-white/80">{r.Body}</div>
-                    <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-white/50">
-                      <span className="text-white/30">Timestamp</span>
+                  <div className="space-y-2 border-t border-border bg-surface-elevated px-3 py-3 text-xs">
+                    <div className="whitespace-pre-wrap break-words text-text-primary">{r.Body}</div>
+                    <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-text-muted">
+                      <span className="text-text-muted">Timestamp</span>
                       <span className="tabular-nums">{new Date(r.Timestamp).toISOString()}</span>
-                      <span className="text-white/30">Service</span>
+                      <span className="text-text-muted">Service</span>
                       <span>{r.ServiceName}</span>
-                      <span className="text-white/30">Severity</span>
+                      <span className="text-text-muted">Severity</span>
                       <span>{lvl}</span>
-                      {r.SpanId && (<><span className="text-white/30">Span</span><span>{r.SpanId}</span></>)}
+                      {r.SpanId && (<><span className="text-text-muted">Span</span><span>{r.SpanId}</span></>)}
                       {r.TraceId && (
                         <>
-                          <span className="text-white/30">Trace</span>
+                          <span className="text-text-muted">Trace</span>
                           <button
                             onClick={(e) => { e.stopPropagation(); openTrace(r.TraceId); }}
-                            className="text-left text-sky-400 hover:underline"
+                            className="text-left text-accent hover:underline"
                           >
                             {r.TraceId} — view waterfall
                           </button>
@@ -189,7 +189,7 @@ export default function LogsPage() {
             );
           })}
           {rows.length === 0 && (
-            <p className="py-10 text-center text-sm text-white/30">No logs match these filters.</p>
+            <p className="py-10 text-center text-sm text-text-muted">No logs match these filters.</p>
           )}
         </div>
       </div>

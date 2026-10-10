@@ -65,7 +65,7 @@ export default function AnomaliesPage() {
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Anomalies</h1>
-          <p className="text-sm text-white/40">
+          <p className="text-sm text-text-muted">
             Statistical deviations from each service&apos;s recent baseline. Sustained anomalies are promoted to incidents.
           </p>
         </div>
@@ -80,44 +80,44 @@ export default function AnomaliesPage() {
         <Tile label="Promoted" value={counts.promoted} tone="info" active={filter === "promoted"} onClick={() => setFilter("promoted")} />
       </div>
 
-      {err && <p className="mb-4 rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-300">{err}</p>}
+      {err && <p className="mb-4 rounded-lg border border-status-critical/30 bg-status-critical/10 p-3 text-sm text-status-critical">{err}</p>}
 
       <div className="mb-3 flex items-center gap-2">
-        <div className="flex rounded-lg border border-white/10 p-0.5 text-xs">
+        <div className="flex rounded-lg border border-border p-0.5 text-xs">
           {(["active", "all", "resolved"] as Filter[]).map((f) => (
             <button key={f} onClick={() => setFilter(f)}
-              className={`rounded-md px-3 py-1 capitalize transition ${filter === f ? "bg-white/10 text-white" : "text-white/50 hover:text-white"}`}>
+              className={`rounded-md px-3 py-1 capitalize transition ${filter === f ? "bg-surface-hover text-text-primary" : "text-text-muted hover:text-text-primary"}`}>
               {f}
             </button>
           ))}
         </div>
-        <span className="ml-auto text-xs text-white/40">{shown.length} shown</span>
+        <span className="ml-auto text-xs text-text-muted">{shown.length} shown</span>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-white/10">
+      <div className="overflow-hidden rounded-xl border border-border">
         {shown.map((a) => {
           const m = sevMeta(a.severity);
           const resolved = a.status === "resolved";
           const deviation = a.observed >= a.baseline_mean ? "above" : "below";
           return (
             <Link key={a.id} href={`/anomalies/${a.id}`}
-              className="group flex items-stretch border-b border-white/[0.06] last:border-0 hover:bg-white/[0.02]">
-              <span className={`w-1 shrink-0 ${resolved ? "bg-white/10" : m.bar}`} />
+              className="group flex items-stretch border-b border-border last:border-0 hover:bg-surface-elevated">
+              <span className={`w-1 shrink-0 ${resolved ? "bg-surface-hover" : m.bar}`} />
               <div className="flex flex-1 flex-wrap items-center gap-4 px-4 py-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${m.bg} ${m.text}`}>
                       <span className={`h-1.5 w-1.5 rounded-full ${m.dot}`} />{m.label}
                     </span>
-                    <span className="font-medium text-white/90">{a.service}</span>
-                    <span className="rounded bg-white/[0.08] px-1.5 py-0.5 text-[10px] text-white/45">{METRIC_LABEL[a.metric] ?? a.metric}</span>
+                    <span className="font-medium text-text-secondary">{a.service}</span>
+                    <span className="rounded bg-surface-elevated px-1.5 py-0.5 text-[10px] text-text-muted">{METRIC_LABEL[a.metric] ?? a.metric}</span>
                     {resolved
-                      ? <span className="rounded-full bg-emerald-500/12 px-2 py-0.5 text-[10px] text-emerald-300/90">resolved</span>
-                      : <span className="rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] text-rose-300">active</span>}
+                      ? <span className="rounded-full bg-status-healthy/12 px-2 py-0.5 text-[10px] text-status-healthy/90">resolved</span>
+                      : <span className="rounded-full bg-status-critical/15 px-2 py-0.5 text-[10px] text-status-critical">active</span>}
                   </div>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/55">
-                    <span className="text-white/75">{fmtVal(a.observed, a.metric)}</span>
-                    <span className="text-white/35">{deviation} baseline {fmtVal(a.baseline_mean, a.metric)}</span>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text-muted">
+                    <span className="text-text-secondary">{fmtVal(a.observed, a.metric)}</span>
+                    <span className="text-text-muted">{deviation} baseline {fmtVal(a.baseline_mean, a.metric)}</span>
                     <span>·</span>
                     <span>z = {a.z_score.toFixed(1)}</span>
                     <span>·</span>
@@ -127,13 +127,13 @@ export default function AnomaliesPage() {
 
                 <div className="flex items-center gap-3">
                   {a.promoted_incident_id && (
-                    <span className="rounded-full bg-violet-500/12 px-2 py-0.5 text-[10px] text-violet-300">incident</span>
+                    <span className="rounded-full bg-accent/12 px-2 py-0.5 text-[10px] text-accent">incident</span>
                   )}
                   <div className="w-16 text-right">
-                    <div className="text-xs text-white/60">{since(a.last_seen)}</div>
-                    <div className="text-[11px] text-white/30">ago</div>
+                    <div className="text-xs text-text-secondary">{since(a.last_seen)}</div>
+                    <div className="text-[11px] text-text-muted">ago</div>
                   </div>
-                  <svg className="h-4 w-4 shrink-0 text-white/20 group-hover:text-white/50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <svg className="h-4 w-4 shrink-0 text-text-muted group-hover:text-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M9 6l6 6-6 6" />
                   </svg>
                 </div>
@@ -142,7 +142,7 @@ export default function AnomaliesPage() {
           );
         })}
         {shown.length === 0 && (
-          <div className="px-4 py-10 text-center text-sm text-white/40">
+          <div className="px-4 py-10 text-center text-sm text-text-muted">
             {filter === "active" ? "No active anomalies. All services within baseline." : "No anomalies match this filter."}
           </div>
         )}
@@ -157,16 +157,16 @@ function Tile({ label, value, tone, active, onClick }: {
   active: boolean; onClick: () => void;
 }) {
   const toneCls =
-    tone === "critical" ? "border-rose-500/30 text-rose-300"
-    : tone === "info" ? "border-sky-400/30 text-sky-300"
-    : tone === "active" ? "border-amber-400/30 text-amber-300"
-    : tone === "resolved" ? "border-emerald-400/30 text-emerald-300"
-    : "border-white/15 text-white/70";
+    tone === "critical" ? "border-status-critical/30 text-status-critical"
+    : tone === "info" ? "border-status-info/30 text-status-info"
+    : tone === "active" ? "border-status-warning/30 text-status-warning"
+    : tone === "resolved" ? "border-status-healthy/30 text-status-healthy"
+    : "border-border text-text-secondary";
   return (
     <button onClick={onClick}
-      className={`rounded-xl border bg-white/[0.02] px-4 py-3 text-left transition hover:bg-white/[0.05] ${toneCls} ${active ? "ring-2 ring-white/30" : ""}`}>
+      className={`rounded-xl border bg-surface-elevated px-4 py-3 text-left transition hover:bg-surface-elevated ${toneCls} ${active ? "ring-2 ring-accent" : ""}`}>
       <div className="text-2xl font-semibold tabular-nums">{value}</div>
-      <div className="mt-0.5 text-xs text-white/45">{label}</div>
+      <div className="mt-0.5 text-xs text-text-muted">{label}</div>
     </button>
   );
 }

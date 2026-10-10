@@ -44,8 +44,8 @@ export default function AnomalyDetailPage({ params }: { params: Promise<{ id: st
     }
   }
 
-  if (err) return <Shell><p className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-300">{err}</p></Shell>;
-  if (!a) return <Shell><p className="text-sm text-white/40">Loading anomaly…</p></Shell>;
+  if (err) return <Shell><p className="rounded-lg border border-status-critical/30 bg-status-critical/10 p-3 text-sm text-status-critical">{err}</p></Shell>;
+  if (!a) return <Shell><p className="text-sm text-text-muted">Loading anomaly…</p></Shell>;
 
   const m = sevMeta(a.severity);
   const active = a.status === "active";
@@ -58,7 +58,7 @@ export default function AnomalyDetailPage({ params }: { params: Promise<{ id: st
 
   return (
     <Shell>
-      <Link href="/anomalies" className="mb-4 inline-flex items-center gap-1 text-xs text-white/45 hover:text-white">
+      <Link href="/anomalies" className="mb-4 inline-flex items-center gap-1 text-xs text-text-muted hover:text-text-primary">
         <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 6l-6 6 6 6" /></svg>
         All anomalies
       </Link>
@@ -71,23 +71,23 @@ export default function AnomalyDetailPage({ params }: { params: Promise<{ id: st
               <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${m.bg} ${m.text} ${m.border}`}>
                 <span className={`h-1.5 w-1.5 rounded-full ${m.dot}`} />{m.label}
               </span>
-              <span className={`rounded-full px-2.5 py-0.5 text-[11px] ${active ? "bg-rose-500/15 text-rose-300" : "bg-emerald-500/15 text-emerald-300"}`}>
+              <span className={`rounded-full px-2.5 py-0.5 text-[11px] ${active ? "bg-status-critical/15 text-status-critical" : "bg-status-healthy/15 text-status-healthy"}`}>
                 {active ? "Active" : "Resolved"}
               </span>
-              <span className="rounded bg-white/[0.08] px-2 py-0.5 text-[11px] text-white/50">{METRIC_LABEL[a.metric] ?? a.metric}</span>
+              <span className="rounded bg-surface-elevated px-2 py-0.5 text-[11px] text-text-muted">{METRIC_LABEL[a.metric] ?? a.metric}</span>
             </div>
-            <h1 className="text-2xl font-semibold tracking-tight text-white/95">{a.service}</h1>
-            <p className="mt-1 text-sm text-white/60">
+            <h1 className="text-2xl font-semibold tracking-tight text-text-muted">{a.service}</h1>
+            <p className="mt-1 text-sm text-text-secondary">
               {fmtVal(a.observed, a.metric)} observed, {deviation} the baseline of {fmtVal(a.baseline_mean, a.metric)}.
             </p>
           </div>
           <div className="text-right">
-            <div className="text-2xl font-semibold tabular-nums text-white/90">{a.z_score.toFixed(1)}σ</div>
-            <div className="text-xs text-white/40">deviation</div>
+            <div className="text-2xl font-semibold tabular-nums text-text-secondary">{a.z_score.toFixed(1)}σ</div>
+            <div className="text-xs text-text-muted">deviation</div>
           </div>
         </div>
 
-        <div className="mt-5 grid grid-cols-2 gap-4 border-t border-white/10 pt-4 sm:grid-cols-4">
+        <div className="mt-5 grid grid-cols-2 gap-4 border-t border-border pt-4 sm:grid-cols-4">
           <Fact label="Observed" value={fmtVal(a.observed, a.metric)} accent={m.text} />
           <Fact label="Baseline" value={fmtVal(a.baseline_mean, a.metric)} />
           <Fact label="Occurrences" value={`${a.occurrences}x`} />
@@ -95,7 +95,7 @@ export default function AnomalyDetailPage({ params }: { params: Promise<{ id: st
         </div>
 
         {ev?.summary && (
-          <p className="mt-4 border-t border-white/10 pt-4 text-sm leading-relaxed text-white/75">
+          <p className="mt-4 border-t border-border pt-4 text-sm leading-relaxed text-text-secondary">
             {ev.summary}
           </p>
         )}
@@ -107,23 +107,23 @@ export default function AnomalyDetailPage({ params }: { params: Promise<{ id: st
           {active && (
             <>
               <button onClick={() => act("resolve")} disabled={busy !== null}
-                className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-1.5 text-sm text-emerald-300 transition hover:bg-emerald-500/20 disabled:opacity-50">
+                className="rounded-lg border border-status-healthy/30 bg-status-healthy/10 px-3 py-1.5 text-sm text-status-healthy transition hover:bg-status-healthy/20 disabled:opacity-50">
                 {busy === "resolve" ? "Resolving…" : "Resolve"}
               </button>
               <button onClick={() => act("dismiss")} disabled={busy !== null}
-                className="rounded-lg border border-white/15 bg-white/[0.03] px-3 py-1.5 text-sm text-white/70 transition hover:bg-white/[0.08] disabled:opacity-50">
+                className="rounded-lg border border-border bg-surface-elevated px-3 py-1.5 text-sm text-text-secondary transition hover:bg-surface-elevated disabled:opacity-50">
                 {busy === "dismiss" ? "Dismissing…" : "Dismiss as false positive"}
               </button>
               {!a.promoted_incident_id && (
                 <button onClick={() => act("escalate")} disabled={busy !== null}
-                  className="rounded-lg border border-rose-400/30 bg-rose-500/10 px-3 py-1.5 text-sm text-rose-300 transition hover:bg-rose-500/20 disabled:opacity-50">
+                  className="rounded-lg border border-status-critical/30 bg-status-critical/10 px-3 py-1.5 text-sm text-status-critical transition hover:bg-status-critical/20 disabled:opacity-50">
                   {busy === "escalate" ? "Escalating…" : "Escalate to incident"}
                 </button>
               )}
             </>
           )}
           {!active && a.resolution !== "auto" && (
-            <span className="rounded-full bg-white/[0.06] px-2.5 py-0.5 text-xs text-white/50">
+            <span className="rounded-full bg-surface-elevated px-2.5 py-0.5 text-xs text-text-muted">
               {a.resolution === "dismissed" ? "Dismissed as false positive" : "Manually resolved"}
             </span>
           )}
@@ -132,9 +132,9 @@ export default function AnomalyDetailPage({ params }: { params: Promise<{ id: st
 
       {a.promoted_incident_id && (
         <Link href={`/incidents/${a.promoted_incident_id}`}
-          className="mt-3 flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm hover:bg-white/[0.04]">
-          <span className="text-white/50">This anomaly was promoted to an incident.</span>
-          <span className="ml-auto text-white/70">Open incident →</span>
+          className="mt-3 flex items-center gap-2 rounded-xl border border-border bg-surface-elevated px-4 py-3 text-sm hover:bg-surface-elevated">
+          <span className="text-text-muted">This anomaly was promoted to an incident.</span>
+          <span className="ml-auto text-text-secondary">Open incident →</span>
         </Link>
       )}
 
@@ -155,21 +155,21 @@ export default function AnomalyDetailPage({ params }: { params: Promise<{ id: st
         <div className="mt-4 rounded-xl border border-teal-400/25 bg-teal-500/[0.05] p-5">
           <div className="mb-3 flex items-center gap-2">
             <svg className="h-4 w-4 text-teal-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 3v3m0 12v3m9-9h-3M6 12H3m14.5-6.5l-2 2m-7 7l-2 2m11 0l-2-2m-7-7l-2-2" /></svg>
-            <h2 className="text-sm font-semibold text-white/85">AI Insights</h2>
+            <h2 className="text-sm font-semibold text-text-secondary">AI Insights</h2>
             <span className="ml-auto rounded-full bg-teal-500/15 px-3 py-0.5 text-[11px] font-medium text-teal-200">{pattern.pattern}</span>
           </div>
-          <p className="text-sm text-white/85">
-            <span className="text-white/45">This looks like a </span>
+          <p className="text-sm text-text-secondary">
+            <span className="text-text-muted">This looks like a </span>
             <span className="font-medium text-teal-200">{pattern.pattern}</span>
-            <span className="text-white/45"> pattern.</span>
+            <span className="text-text-muted"> pattern.</span>
           </p>
-          <p className="mt-1 text-sm leading-relaxed text-white/65">{pattern.description}</p>
+          <p className="mt-1 text-sm leading-relaxed text-text-secondary">{pattern.description}</p>
           {pattern.signals.length > 0 && (
             <div className="mt-3">
-              <div className="mb-1.5 text-xs uppercase tracking-wide text-white/35">Signals</div>
+              <div className="mb-1.5 text-xs uppercase tracking-wide text-text-muted">Signals</div>
               <ul className="space-y-1">
                 {pattern.signals.map((sig, i) => (
-                  <li key={i} className="flex gap-2 text-sm text-white/70"><span className="text-teal-300/70">•</span><span>{sig}</span></li>
+                  <li key={i} className="flex gap-2 text-sm text-text-secondary"><span className="text-teal-300/70">•</span><span>{sig}</span></li>
                 ))}
               </ul>
             </div>
@@ -179,31 +179,31 @@ export default function AnomalyDetailPage({ params }: { params: Promise<{ id: st
 
       {/* 4. WHY THIS WAS DETECTED */}
       {why && (
-        <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-5">
-          <h2 className="mb-3 text-sm font-medium text-white/80">Why this anomaly was detected</h2>
+        <div className="mt-4 rounded-xl border border-border bg-surface-elevated p-5">
+          <h2 className="mb-3 text-sm font-medium text-text-secondary">Why this anomaly was detected</h2>
           <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
             <KV label="Metric" value={why.metric} />
-            <KV label="Observed" value={why.observed} accent="text-rose-300" />
+            <KV label="Observed" value={why.observed} accent="text-status-critical" />
             <KV label="Baseline" value={why.baseline} />
             <KV label="Deviation" value={why.deviation} />
             <KV label="Detection threshold" value={why.threshold} />
           </div>
-          <p className="mt-4 border-t border-white/10 pt-3 text-sm leading-relaxed text-white/65">{why.reason}</p>
+          <p className="mt-4 border-t border-border pt-3 text-sm leading-relaxed text-text-secondary">{why.reason}</p>
         </div>
       )}
 
       {/* 5. TREND */}
       {ev && ev.trend.length > 0 && (
-        <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-5">
+        <div className="mt-4 rounded-xl border border-border bg-surface-elevated p-5">
           <div className="mb-1 flex items-center justify-between">
-            <h2 className="text-sm font-medium text-white/80">Baseline comparison</h2>
-            <div className="flex items-center gap-4 text-[11px] text-white/45">
-              <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 bg-sky-400" />observed</span>
-              <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 border-t border-dashed border-white/50" />baseline</span>
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-sm bg-emerald-400/15" />normal range</span>
+            <h2 className="text-sm font-medium text-text-secondary">Baseline comparison</h2>
+            <div className="flex items-center gap-4 text-[11px] text-text-muted">
+              <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 bg-status-info" />observed</span>
+              <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 border-t border-dashed border-border" />baseline</span>
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-sm bg-status-healthy/15" />normal range</span>
             </div>
           </div>
-          <p className="mb-3 text-xs text-white/40">Observed {METRIC_LABEL[a.metric]?.toLowerCase() ?? a.metric} against the expected baseline and its normal range. Points outside the band are anomalous.</p>
+          <p className="mb-3 text-xs text-text-muted">Observed {METRIC_LABEL[a.metric]?.toLowerCase() ?? a.metric} against the expected baseline and its normal range. Points outside the band are anomalous.</p>
           {(() => {
             const Z = 3.0;
             const band = a.baseline_std * Z;
@@ -245,26 +245,26 @@ export default function AnomalyDetailPage({ params }: { params: Promise<{ id: st
 
       {/* 6. EVIDENCE & CORRELATION — with contribution % */}
       {an && (an.contributions.length > 0 || ev!.affected_services.length > 0) && (
-        <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-5">
-          <h2 className="mb-1 text-sm font-medium text-white/80">Evidence &amp; correlation</h2>
-          <p className="mb-4 text-xs text-white/40">Live telemetry from the anomaly window.</p>
+        <div className="mt-4 rounded-xl border border-border bg-surface-elevated p-5">
+          <h2 className="mb-1 text-sm font-medium text-text-secondary">Evidence &amp; correlation</h2>
+          <p className="mb-4 text-xs text-text-muted">Live telemetry from the anomaly window.</p>
 
           {ev!.affected_services.length > 0 && (
             <div className="mb-5">
-              <div className="mb-2 text-xs uppercase tracking-wide text-white/35">Affected services</div>
+              <div className="mb-2 text-xs uppercase tracking-wide text-text-muted">Affected services</div>
               <div className="space-y-1.5">
                 {ev!.affected_services.map((sv) => (
-                  <div key={sv.service} className="flex items-center gap-3 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2">
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-white/85">{sv.service}</span>
+                  <div key={sv.service} className="flex items-center gap-3 rounded-lg border border-border bg-surface-elevated px-3 py-2">
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-text-secondary">{sv.service}</span>
                     {a.metric === "error_rate" ? (
                       <>
-                        <span className="text-xs text-rose-300">{sv.error_rate}% errors</span>
-                        <span className="text-xs text-white/40">{sv.errors}/{sv.total}</span>
+                        <span className="text-xs text-status-critical">{sv.error_rate}% errors</span>
+                        <span className="text-xs text-text-muted">{sv.errors}/{sv.total}</span>
                       </>
                     ) : (
-                      <span className="text-xs text-white/40">{sv.total} calls</span>
+                      <span className="text-xs text-text-muted">{sv.total} calls</span>
                     )}
-                    <span className="w-20 text-right text-xs text-white/50">{sv.p95_ms}ms</span>
+                    <span className="w-20 text-right text-xs text-text-muted">{sv.p95_ms}ms</span>
                   </div>
                 ))}
               </div>
@@ -273,19 +273,19 @@ export default function AnomalyDetailPage({ params }: { params: Promise<{ id: st
 
           {an.contributions.length > 0 && (
             <div className="mb-5">
-              <div className="mb-2 text-xs uppercase tracking-wide text-white/35">Operations by contribution</div>
+              <div className="mb-2 text-xs uppercase tracking-wide text-text-muted">Operations by contribution</div>
               <div className="space-y-1.5">
                 {an.contributions.map((c, i) => (
-                  <div key={i} className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2">
+                  <div key={i} className="rounded-lg border border-border bg-surface-elevated px-3 py-2">
                     <div className="flex items-center gap-3">
-                      <span className="shrink-0 rounded bg-violet-500/12 px-1.5 py-0.5 text-[10px] text-violet-300">{c.contribution_pct}%</span>
-                      <span className="shrink-0 font-mono text-xs text-sky-300/80">{c.endpoint}</span>
-                      <span className="min-w-0 flex-1 truncate text-xs text-white/70">{c.detail}</span>
-                      <span className="shrink-0 text-[11px] text-white/35">{c.service}</span>
-                      <span className="w-16 shrink-0 text-right text-[11px] text-white/40">{c.occurrences}x</span>
+                      <span className="shrink-0 rounded bg-accent/12 px-1.5 py-0.5 text-[10px] text-accent">{c.contribution_pct}%</span>
+                      <span className="shrink-0 font-mono text-xs text-status-info/80">{c.endpoint}</span>
+                      <span className="min-w-0 flex-1 truncate text-xs text-text-secondary">{c.detail}</span>
+                      <span className="shrink-0 text-[11px] text-text-muted">{c.service}</span>
+                      <span className="w-16 shrink-0 text-right text-[11px] text-text-muted">{c.occurrences}x</span>
                     </div>
-                    <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-white/[0.06]">
-                      <div className="h-full rounded-full bg-violet-400/60" style={{ width: `${c.contribution_pct}%` }} />
+                    <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-surface-elevated">
+                      <div className="h-full rounded-full bg-accent/60" style={{ width: `${c.contribution_pct}%` }} />
                     </div>
                   </div>
                 ))}
@@ -295,18 +295,18 @@ export default function AnomalyDetailPage({ params }: { params: Promise<{ id: st
 
           {ev!.sample_traces.length > 0 && (
             <div>
-              <div className="mb-2 text-xs uppercase tracking-wide text-white/35">Sample traces</div>
+              <div className="mb-2 text-xs uppercase tracking-wide text-text-muted">Sample traces</div>
               <div className="space-y-1.5">
                 {ev!.sample_traces.slice(0, 5).map((t, ti) => {
                   const label = ti === 0 ? "Highest impact" : ti === ev!.sample_traces.length - 1 ? "Most recent" : "Representative";
                   return (
                     <a key={`${t.trace_id}-${ti}`} href={`/traces?trace=${t.trace_id}`}
-                      className="flex items-center gap-3 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2 hover:bg-white/[0.04]">
-                      <span className="shrink-0 rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px] text-white/50">{label}</span>
-                      <span className="font-mono text-[11px] text-sky-300/80">{t.trace_id.slice(0, 12)}…</span>
-                      <span className="min-w-0 flex-1 truncate text-xs text-white/70">{t.operation}</span>
-                      <span className="text-[11px] text-white/40">{t.service}</span>
-                      <span className="w-16 text-right text-[11px] text-white/50">{t.duration_ms}ms</span>
+                      className="flex items-center gap-3 rounded-lg border border-border bg-surface-elevated px-3 py-2 hover:bg-surface-elevated">
+                      <span className="shrink-0 rounded bg-surface-elevated px-1.5 py-0.5 text-[10px] text-text-muted">{label}</span>
+                      <span className="font-mono text-[11px] text-status-info/80">{t.trace_id.slice(0, 12)}…</span>
+                      <span className="min-w-0 flex-1 truncate text-xs text-text-secondary">{t.operation}</span>
+                      <span className="text-[11px] text-text-muted">{t.service}</span>
+                      <span className="w-16 text-right text-[11px] text-text-muted">{t.duration_ms}ms</span>
                     </a>
                   );
                 })}
@@ -317,29 +317,29 @@ export default function AnomalyDetailPage({ params }: { params: Promise<{ id: st
       )}
 
       {/* 7. TIMELINE */}
-      <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-5">
-        <h2 className="mb-3 text-sm font-medium text-white/80">Timeline</h2>
+      <div className="mt-4 rounded-xl border border-border bg-surface-elevated p-5">
+        <h2 className="mb-3 text-sm font-medium text-text-secondary">Timeline</h2>
         <div className="space-y-3">
-          <TimelineRow color="bg-amber-400" label="Detected" detail={`${METRIC_LABEL[a.metric]} crossed the detection threshold`} time={a.first_seen} />
+          <TimelineRow color="bg-status-warning" label="Detected" detail={`${METRIC_LABEL[a.metric]} crossed the detection threshold`} time={a.first_seen} />
           {a.promoted_incident_id && (
-            <TimelineRow color="bg-rose-400" label="Escalated to incident" detail="Sustained deviation promoted to a paging incident" time={a.first_seen} />
+            <TimelineRow color="bg-status-critical" label="Escalated to incident" detail="Sustained deviation promoted to a paging incident" time={a.first_seen} />
           )}
           {a.resolved_at && (
-            <TimelineRow color="bg-emerald-400" label={a.resolution === "dismissed" ? "Dismissed" : "Resolved"}
+            <TimelineRow color="bg-status-healthy" label={a.resolution === "dismissed" ? "Dismissed" : "Resolved"}
               detail={a.resolution === "auto" ? "Metric returned to baseline" : a.resolution === "dismissed" ? "Marked as false positive" : "Manually resolved"} time={a.resolved_at} />
           )}
-          {active && <TimelineRow color="bg-rose-400" label="Ongoing" detail="Still deviating from baseline" time={a.last_seen} />}
+          {active && <TimelineRow color="bg-status-critical" label="Ongoing" detail="Still deviating from baseline" time={a.last_seen} />}
         </div>
       </div>
 
       {/* 8. INVESTIGATION GUIDANCE */}
       {an && an.guidance.length > 0 && (
-        <div className="mt-4 rounded-xl border border-sky-400/20 bg-sky-500/[0.04] p-5">
-          <h2 className="mb-3 text-sm font-medium text-white/80">What to investigate next</h2>
+        <div className="mt-4 rounded-xl border border-status-info/20 bg-status-info/[0.04] p-5">
+          <h2 className="mb-3 text-sm font-medium text-text-secondary">What to investigate next</h2>
           <ol className="space-y-2">
             {an.guidance.map((g, i) => (
-              <li key={i} className="flex gap-3 text-sm text-white/75">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-sky-500/15 text-[11px] text-sky-300">{i + 1}</span>
+              <li key={i} className="flex gap-3 text-sm text-text-secondary">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-status-info/15 text-[11px] text-status-info">{i + 1}</span>
                 <span>{g}</span>
               </li>
             ))}
@@ -353,8 +353,8 @@ export default function AnomalyDetailPage({ params }: { params: Promise<{ id: st
 function Fact({ label, value, accent }: { label: string; value: string; accent?: string }) {
   return (
     <div>
-      <div className="text-[11px] uppercase tracking-wide text-white/35">{label}</div>
-      <div className={`mt-0.5 text-sm font-medium ${accent ?? "text-white/80"}`}>{value}</div>
+      <div className="text-[11px] uppercase tracking-wide text-text-muted">{label}</div>
+      <div className={`mt-0.5 text-sm font-medium ${accent ?? "text-text-secondary"}`}>{value}</div>
     </div>
   );
 }
@@ -362,21 +362,21 @@ function Fact({ label, value, accent }: { label: string; value: string; accent?:
 function KV({ label, value, accent }: { label: string; value: string; accent?: string }) {
   return (
     <div>
-      <div className="text-[11px] uppercase tracking-wide text-white/35">{label}</div>
-      <div className={`mt-0.5 text-sm font-medium ${accent ?? "text-white/80"}`}>{value}</div>
+      <div className="text-[11px] uppercase tracking-wide text-text-muted">{label}</div>
+      <div className={`mt-0.5 text-sm font-medium ${accent ?? "text-text-secondary"}`}>{value}</div>
     </div>
   );
 }
 
 function ImpactCard({ label, value, tone }: { label: string; value: string; tone?: "critical" | "warning" | "neutral" }) {
   const toneCls =
-    tone === "critical" ? "text-rose-300"
-    : tone === "warning" ? "text-amber-300"
-    : "text-white/85";
+    tone === "critical" ? "text-status-critical"
+    : tone === "warning" ? "text-status-warning"
+    : "text-text-secondary";
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3">
+    <div className="rounded-xl border border-border bg-surface-elevated px-4 py-3">
       <div className={`text-xl font-semibold tabular-nums ${toneCls}`}>{value}</div>
-      <div className="mt-0.5 text-xs text-white/45">{label}</div>
+      <div className="mt-0.5 text-xs text-text-muted">{label}</div>
     </div>
   );
 }
@@ -386,14 +386,14 @@ function TimelineRow({ color, label, detail, time }: { color: string; label: str
     <div className="flex gap-3">
       <div className="mt-1 flex flex-col items-center">
         <span className={`h-2 w-2 rounded-full ${color}`} />
-        <span className="mt-1 w-px flex-1 bg-white/10" />
+        <span className="mt-1 w-px flex-1 bg-surface-hover" />
       </div>
       <div className="flex-1 pb-1">
         <div className="flex items-baseline justify-between gap-2">
-          <span className="text-sm font-medium text-white/85">{label}</span>
-          <span className="text-[11px] text-white/35">{since(time)} ago</span>
+          <span className="text-sm font-medium text-text-secondary">{label}</span>
+          <span className="text-[11px] text-text-muted">{since(time)} ago</span>
         </div>
-        <p className="text-xs text-white/50">{detail}</p>
+        <p className="text-xs text-text-muted">{detail}</p>
       </div>
     </div>
   );

@@ -63,14 +63,14 @@ export default function ApplicationsPage() {
     <Shell>
       <div className="mb-4">
         <h1 className="text-xl font-semibold tracking-tight">Applications</h1>
-        <p className="text-sm text-white/40">
+        <p className="text-sm text-text-muted">
           Each application has ingestion keys. Point your telemetry at the gateway with a key
           and it is stamped with this application&apos;s tenant automatically.
         </p>
       </div>
 
       {err && (
-        <p className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{err}</p>
+        <p className="mb-4 rounded-lg border border-status-critical/30 bg-status-critical/10 p-3 text-sm text-status-critical">{err}</p>
       )}
 
       <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
@@ -81,39 +81,39 @@ export default function ApplicationsPage() {
               onClick={() => { setSelected(a.id); setJustCreated(null); }}
               className={`w-full rounded-lg border px-3 py-2 text-left text-sm transition ${
                 selected === a.id
-                  ? "border-white/30 bg-white/10"
-                  : "border-white/10 text-white/60 hover:bg-white/5"
+                  ? "border-border bg-surface-hover"
+                  : "border-border text-text-secondary hover:bg-surface-elevated"
               }`}
             >
               <div className="font-medium">{a.name}</div>
-              <div className="text-[11px] text-white/40">{a.namespace}</div>
+              <div className="text-[11px] text-text-muted">{a.namespace}</div>
             </button>
           ))}
           {apps.length === 0 && (
-            <p className="text-sm text-white/40">No applications yet.</p>
+            <p className="text-sm text-text-muted">No applications yet.</p>
           )}
         </div>
 
-        <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+        <div className="rounded-xl border border-border bg-surface-elevated p-4">
           {app ? (
             <>
               <div className="mb-3 flex items-center justify-between">
                 <div>
                   <h2 className="font-medium">{app.name}</h2>
-                  <p className="text-xs text-white/40">
-                    tenant <span className="font-mono text-white/60">{app.tenant_tag}</span>
-                    {" · "}namespace <span className="font-mono text-white/60">{app.namespace}</span>
+                  <p className="text-xs text-text-muted">
+                    tenant <span className="font-mono text-text-secondary">{app.tenant_tag}</span>
+                    {" · "}namespace <span className="font-mono text-text-secondary">{app.namespace}</span>
                   </p>
                 </div>
               </div>
 
               {justCreated && (
-                <div className="mb-4 rounded-lg border border-emerald-400/40 bg-emerald-500/10 p-3">
-                  <p className="text-xs text-emerald-200">
+                <div className="mb-4 rounded-lg border border-status-healthy/40 bg-status-healthy/10 p-3">
+                  <p className="text-xs text-status-healthy">
                     Copy this key now. It is shown once and cannot be retrieved again.
                   </p>
                   <div className="mt-2 flex items-center gap-2">
-                    <code className="flex-1 overflow-x-auto rounded bg-black/40 px-2 py-1.5 font-mono text-xs text-emerald-100">
+                    <code className="flex-1 overflow-x-auto rounded bg-surface-elevated px-2 py-1.5 font-mono text-xs text-status-healthy">
                       {justCreated.full_key}
                     </code>
                     <button
@@ -121,7 +121,7 @@ export default function ApplicationsPage() {
                         navigator.clipboard?.writeText(justCreated.full_key);
                         setCopied(true);
                       }}
-                      className="rounded-md border border-emerald-400/40 px-2 py-1 text-xs text-emerald-200 hover:bg-emerald-500/20"
+                      className="rounded-md border border-status-healthy/40 px-2 py-1 text-xs text-status-healthy hover:bg-status-healthy/20"
                     >
                       {copied ? "Copied" : "Copy"}
                     </button>
@@ -134,12 +134,12 @@ export default function ApplicationsPage() {
                   value={newKeyName}
                   onChange={(e) => setNewKeyName(e.target.value)}
                   placeholder="Key name (e.g. production)"
-                  className="flex-1 rounded-lg border border-white/10 bg-black/30 px-3 py-1.5 text-sm outline-none focus:border-white/40"
+                  className="flex-1 rounded-lg border border-border bg-surface-elevated px-3 py-1.5 text-sm outline-none focus:border-border"
                 />
 {canManage(role) && (
                 <button
                   onClick={generate}
-                  className="rounded-lg border border-violet-400/40 bg-violet-500/15 px-3 py-1.5 text-sm text-violet-200 hover:bg-violet-500/25"
+                  className="rounded-lg border border-accent/40 bg-accent/15 px-3 py-1.5 text-sm text-accent hover:bg-accent/25"
                 >
                   Generate key
                 </button>
@@ -151,21 +151,21 @@ export default function ApplicationsPage() {
                   <div
                     key={k.id}
                     className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm ${
-                      k.revoked_at ? "border-white/5 opacity-50" : "border-white/10"
+                      k.revoked_at ? "border-border opacity-50" : "border-border"
                     }`}
                   >
                     <div>
-                      <span className="font-mono text-white/80">{k.prefix}…</span>
-                      <span className="ml-2 text-white/50">{k.name}</span>
-                      {k.revoked_at && <span className="ml-2 text-xs text-red-300">revoked</span>}
-                      <div className="text-[11px] text-white/30">
+                      <span className="font-mono text-text-secondary">{k.prefix}…</span>
+                      <span className="ml-2 text-text-muted">{k.name}</span>
+                      {k.revoked_at && <span className="ml-2 text-xs text-status-critical">revoked</span>}
+                      <div className="text-[11px] text-text-muted">
                         {k.last_used_at ? `last used ${new Date(k.last_used_at).toLocaleString()}` : "never used"}
                       </div>
                     </div>
                     {!k.revoked_at && canManage(role) && (
                       <button
                         onClick={() => revoke(k.id)}
-                        className="rounded-md border border-red-400/30 px-2 py-1 text-xs text-red-300 hover:bg-red-500/15"
+                        className="rounded-md border border-status-critical/30 px-2 py-1 text-xs text-status-critical hover:bg-status-critical/15"
                       >
                         Revoke
                       </button>
@@ -173,12 +173,12 @@ export default function ApplicationsPage() {
                   </div>
                 ))}
                 {keys.length === 0 && (
-                  <p className="text-sm text-white/40">No keys yet. Generate one to start ingesting.</p>
+                  <p className="text-sm text-text-muted">No keys yet. Generate one to start ingesting.</p>
                 )}
               </div>
             </>
           ) : (
-            <p className="text-sm text-white/40">Select an application.</p>
+            <p className="text-sm text-text-muted">Select an application.</p>
           )}
         </div>
       </div>

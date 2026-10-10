@@ -13,10 +13,10 @@ export function Card({
 }) {
   return (
     <div
-      className={`rounded-xl border border-white/10 bg-white/[0.03] p-4 ${className}`}
+      className={`rounded-xl border border-border bg-surface-card p-4 card-elev ${className}`}
     >
       {title && (
-        <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-white/40">
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-text-muted">
           {title}
         </h2>
       )}
@@ -38,29 +38,30 @@ export function Stat({
 }) {
   const color =
     tone === "danger"
-      ? "text-red-400"
+      ? "text-status-critical"
       : tone === "good"
-        ? "text-emerald-400"
-        : "text-white";
+        ? "text-status-healthy"
+        : "text-text-primary";
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-      <div className="text-xs uppercase tracking-wider text-white/40">{label}</div>
+    <div className="rounded-xl border border-border bg-surface-card p-4 card-elev">
+      <div className="text-xs font-medium uppercase tracking-wider text-text-muted">
+        {label}
+      </div>
       <div className={`mt-1 text-2xl font-semibold tabular-nums ${color}`}>
         {value}
-        {suffix && <span className="ml-1 text-sm text-white/40">{suffix}</span>}
+        {suffix && <span className="ml-1 text-sm font-normal text-text-muted">{suffix}</span>}
       </div>
     </div>
   );
 }
-
 export function Badge({ status }: { status: string }) {
   const danger = status === "Error";
   return (
     <span
       className={`rounded px-1.5 py-0.5 text-xs font-medium ${
         danger
-          ? "bg-red-500/15 text-red-300"
-          : "bg-emerald-500/15 text-emerald-300"
+          ? "bg-status-critical/15 text-status-critical"
+          : "bg-status-healthy/15 text-status-healthy"
       }`}
     >
       {danger ? "Error" : "OK"}
@@ -72,10 +73,10 @@ export function SeverityBadge({ level }: { level: string }) {
   const l = level.toUpperCase();
   const cls =
     l === "ERROR"
-      ? "bg-red-500/15 text-red-300"
+      ? "bg-status-critical/15 text-status-critical"
       : l === "WARN" || l === "WARNING"
-        ? "bg-amber-500/15 text-amber-300"
-        : "bg-sky-500/15 text-sky-300";
+        ? "bg-status-warning/15 text-status-warning"
+        : "bg-status-info/15 text-status-info";
   return (
     <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${cls}`}>{l}</span>
   );
@@ -95,13 +96,15 @@ export function RangePicker({
     { label: "24h", v: 1440 },
   ];
   return (
-    <div className="flex rounded-lg border border-white/10 p-0.5">
+    <div className="flex rounded-lg border border-border bg-surface-card p-0.5">
       {opts.map((o) => (
         <button
           key={o.v}
           onClick={() => onChange(o.v)}
-          className={`rounded px-2.5 py-1 text-xs transition ${
-            value === o.v ? "bg-white/10 text-white" : "text-white/50 hover:text-white"
+          className={`rounded px-2.5 py-1 text-xs font-medium transition ${
+            value === o.v
+              ? "bg-accent text-accent-fg"
+              : "text-text-secondary hover:bg-surface-hover hover:text-text-primary"
           }`}
         >
           {o.label}
@@ -112,13 +115,13 @@ export function RangePicker({
 }
 
 export const SERVICE_COLORS = [
-  "#60a5fa",
-  "#f472b6",
-  "#34d399",
-  "#fbbf24",
-  "#a78bfa",
-  "#22d3ee",
-  "#fb923c",
+  "var(--color-data-1)",
+  "var(--color-data-2)",
+  "var(--color-data-3)",
+  "var(--color-data-4)",
+  "var(--color-data-5)",
+  "var(--color-data-6)",
+  "var(--color-data-7)",
 ];
 
 export function colorFor(name: string): string {

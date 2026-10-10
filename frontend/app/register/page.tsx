@@ -14,8 +14,8 @@ const INDUSTRIES = [
 ];
 
 const inputCls =
-  "w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none focus:border-white/40";
-const labelCls = "mb-1 block text-xs font-medium text-white/50";
+  "w-full rounded-lg border border-border bg-surface-elevated px-3 py-2 text-sm outline-none transition focus:border-accent focus:ring-1 focus:ring-accent";
+const labelCls = "mb-1 block text-xs font-medium text-text-secondary";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -78,18 +78,18 @@ export default function RegisterPage() {
     <div className="flex min-h-screen items-center justify-center p-6">
       <div className="w-full max-w-2xl">
         <div className="mb-6 flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 text-sm font-bold">OX</div>
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent/15 text-sm font-bold text-accent">OX</div>
           <div>
             <h1 className="text-xl font-semibold tracking-tight">Create your OpenObserveX account</h1>
-            <p className="text-sm text-white/45">Identity &amp; Access Management</p>
+            <p className="text-sm text-text-muted">Identity &amp; Access Management</p>
           </div>
         </div>
 
-        <form onSubmit={onSubmit} className="rounded-2xl border border-white/10 bg-white/[0.03] p-8">
+        <form onSubmit={onSubmit} className="rounded-2xl border border-border bg-surface-card p-8">
           {/* Personal */}
           <div className="mb-2 flex items-center gap-2">
-            <h2 className="text-sm font-semibold text-white/80">Personal information</h2>
-            <div className="h-px flex-1 bg-white/10" />
+            <h2 className="text-sm font-semibold text-text-primary">Personal information</h2>
+            <div className="h-px flex-1 bg-border" />
           </div>
           <div className="mb-6 grid gap-4 sm:grid-cols-2">
             <div>
@@ -112,8 +112,8 @@ export default function RegisterPage() {
 
           {/* Organization */}
           <div className="mb-2 flex items-center gap-2">
-            <h2 className="text-sm font-semibold text-white/80">Organization</h2>
-            <div className="h-px flex-1 bg-white/10" />
+            <h2 className="text-sm font-semibold text-text-primary">Organization</h2>
+            <div className="h-px flex-1 bg-border" />
           </div>
           <div className="mb-6 grid gap-4 sm:grid-cols-2">
             <div>
@@ -150,8 +150,8 @@ export default function RegisterPage() {
 
           {/* Security */}
           <div className="mb-2 flex items-center gap-2">
-            <h2 className="text-sm font-semibold text-white/80">Security</h2>
-            <div className="h-px flex-1 bg-white/10" />
+            <h2 className="text-sm font-semibold text-text-primary">Security</h2>
+            <div className="h-px flex-1 bg-border" />
           </div>
           <div className="mb-6 grid gap-4 sm:grid-cols-2">
             <div>
@@ -162,24 +162,24 @@ export default function RegisterPage() {
               <label className={labelCls}>Confirm password *</label>
               <PasswordField value={form.confirm} onChange={(v) => set("confirm", v)} placeholder="Re-enter your password" showMeter={false} />
               {form.confirm.length > 0 && form.confirm !== form.password && (
-                <p className="mt-1 text-[11px] text-red-400">Passwords do not match.</p>
+                <p className="mt-1 text-[11px] text-status-critical">Passwords do not match.</p>
               )}
             </div>
           </div>
 
           {error && (
-            <p className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{error}</p>
+            <p className="mb-4 rounded-lg border border-status-critical/30 bg-status-critical/10 p-3 text-sm text-status-critical">{error}</p>
           )}
-          <button type="submit" disabled={loading} className="w-full rounded-lg bg-white py-2.5 font-medium text-black transition disabled:opacity-50">
+          <button type="submit" disabled={loading} className="w-full rounded-lg bg-accent py-2.5 font-medium text-text-primary transition hover:bg-accent-hover glow-accent disabled:opacity-50">
             {loading ? "Creating account..." : "Create account"}
           </button>
 
-          <p className="mt-4 text-center text-xs text-white/40">
+          <p className="mt-4 text-center text-xs text-text-muted">
             By creating an account you agree to your organization&apos;s security and access policies.
           </p>
-          <p className="mt-3 text-center text-sm text-white/50">
+          <p className="mt-3 text-center text-sm text-text-secondary">
             Already have an account?{" "}
-            <Link href="/login" className="text-sky-400 hover:underline">Sign in</Link>
+            <Link href="/login" className="text-accent hover:underline">Sign in</Link>
           </p>
         </form>
       </div>

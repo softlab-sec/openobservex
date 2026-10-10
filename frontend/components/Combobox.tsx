@@ -69,7 +69,7 @@ export default function Combobox({
   }
 
   const base =
-    "w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none focus:border-white/40 disabled:opacity-40 disabled:cursor-not-allowed";
+    "w-full rounded-lg border border-border bg-surface-elevated px-3 py-2 text-sm outline-none focus:border-border disabled:opacity-40 disabled:cursor-not-allowed";
 
   return (
     <div className="relative" ref={boxRef}>
@@ -95,10 +95,10 @@ export default function Combobox({
         <ul
           id={listId}
           role="listbox"
-          className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-white/10 bg-[#0d0d11] py-1 shadow-xl"
+          className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-border bg-[#0d0d11] py-1 shadow-xl"
         >
           {filtered.length === 0 ? (
-            <li className="px-3 py-2 text-xs text-white/30">{emptyText}</li>
+            <li className="px-3 py-2 text-xs text-text-muted">{emptyText}</li>
           ) : (
             filtered.map((opt, i) => (
               <li
@@ -111,8 +111,8 @@ export default function Combobox({
                 }}
                 onMouseEnter={() => setActive(i)}
                 className={`cursor-pointer px-3 py-2 text-sm ${
-                  i === active ? "bg-white/10" : ""
-                } ${opt === value ? "text-white" : "text-white/70"}`}
+                  i === active ? "bg-surface-hover" : ""
+                } ${opt === value ? "text-text-primary" : "text-text-secondary"}`}
               >
                 {opt}
               </li>

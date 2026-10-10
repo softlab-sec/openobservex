@@ -5,9 +5,9 @@ import { Card, Stat } from "@/components/ui";
 import { apiGet, type SystemHealth } from "@/lib/api";
 
 const STATUS_STYLE: Record<string, { dot: string; text: string; label: string; ring: string }> = {
-  healthy: { dot: "bg-emerald-400", text: "text-emerald-300", label: "All systems operational", ring: "ring-emerald-400/30" },
-  degraded: { dot: "bg-amber-400", text: "text-amber-300", label: "Degraded, a component needs attention", ring: "ring-amber-400/30" },
-  down: { dot: "bg-red-400", text: "text-red-300", label: "Core storage unavailable", ring: "ring-red-400/30" },
+  healthy: { dot: "bg-status-healthy", text: "text-status-healthy", label: "All systems operational", ring: "ring-status-healthy/30" },
+  degraded: { dot: "bg-status-warning", text: "text-status-warning", label: "Degraded, a component needs attention", ring: "ring-status-warning/30" },
+  down: { dot: "bg-status-critical", text: "text-status-critical", label: "Core storage unavailable", ring: "ring-status-critical/30" },
 };
 
 function lagTone(sec: number | null): "good" | "default" | "danger" {
@@ -56,30 +56,30 @@ export default function SystemHealthPage() {
     <Shell title="System Health">
       <div className="mb-2 flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-white">System Health</h1>
-          <p className="text-sm text-white/50">OpenObserveX observing its own operational vitals. Refreshes every 10s.</p>
+          <h1 className="text-xl font-semibold text-text-primary">System Health</h1>
+          <p className="text-sm text-text-muted">OpenObserveX observing its own operational vitals. Refreshes every 10s.</p>
         </div>
         <button
           onClick={load}
-          className="rounded-lg border border-white/15 px-3 py-1.5 text-sm text-white/80 transition hover:bg-white/[0.08]"
+          className="rounded-lg border border-border px-3 py-1.5 text-sm text-text-secondary transition hover:bg-surface-elevated"
         >
           Refresh
         </button>
       </div>
 
       {err && (
-        <p className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{err}</p>
+        <p className="mb-4 rounded-lg border border-status-critical/30 bg-status-critical/10 p-3 text-sm text-status-critical">{err}</p>
       )}
 
       {h && st && (
-        <div className={`mb-6 flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-4 ring-1 ${st.ring}`}>
+        <div className={`mb-6 flex items-center gap-3 rounded-xl border border-border bg-surface-elevated p-4 ring-1 ${st.ring}`}>
           <span className="relative flex h-3 w-3">
             <span className={`absolute inline-flex h-full w-full animate-ping rounded-full ${st.dot} opacity-60`} />
             <span className={`relative inline-flex h-3 w-3 rounded-full ${st.dot}`} />
           </span>
           <div>
             <div className={`text-sm font-semibold uppercase tracking-wide ${st.text}`}>{h.status}</div>
-            <div className="text-sm text-white/60">{st.label}</div>
+            <div className="text-sm text-text-secondary">{st.label}</div>
           </div>
         </div>
       )}
@@ -92,10 +92,10 @@ export default function SystemHealthPage() {
       </div>
 
       <Card title="Storage and Ingest Rate">
-        <div className="overflow-hidden rounded-lg border border-white/10">
+        <div className="overflow-hidden rounded-lg border border-border">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-white/[0.04] text-left text-white/50">
+              <tr className="bg-surface-elevated text-left text-text-muted">
                 <th className="px-4 py-2 font-medium">Signal</th>
                 <th className="px-4 py-2 font-medium">Stored Rows</th>
                 <th className="px-4 py-2 font-medium">Ingest Rate (last 5m)</th>
@@ -108,13 +108,13 @@ export default function SystemHealthPage() {
                 const rate = e?.per_min_5m ?? 0;
                 const live = rate > 0;
                 return (
-                  <tr key={key} className="border-t border-white/5">
-                    <td className="px-4 py-2.5 font-medium text-white/80">{label}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-white/70">{fmtRows(e?.rows ?? null)}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-white/70">{e ? `${rate.toLocaleString()} /min` : "-"}</td>
+                  <tr key={key} className="border-t border-border">
+                    <td className="px-4 py-2.5 font-medium text-text-secondary">{label}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-text-secondary">{fmtRows(e?.rows ?? null)}</td>
+                    <td className="px-4 py-2.5 tabular-nums text-text-secondary">{e ? `${rate.toLocaleString()} /min` : "-"}</td>
                     <td className="px-4 py-2.5">
-                      <span className={`inline-flex items-center gap-1.5 text-xs ${live ? "text-emerald-300" : "text-white/40"}`}>
-                        <span className={`h-1.5 w-1.5 rounded-full ${live ? "bg-emerald-400" : "bg-white/30"}`} />
+                      <span className={`inline-flex items-center gap-1.5 text-xs ${live ? "text-status-healthy" : "text-text-muted"}`}>
+                        <span className={`h-1.5 w-1.5 rounded-full ${live ? "bg-status-healthy" : "bg-surface-hover"}`} />
                         {live ? "flowing" : "idle"}
                       </span>
                     </td>
@@ -130,15 +130,15 @@ export default function SystemHealthPage() {
         <Card title="Component Liveness">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {h && Object.entries(h.components).map(([name, up]) => (
-              <div key={name} className="flex items-center gap-2.5 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2.5">
-                <span className={`h-2.5 w-2.5 rounded-full ${up ? "bg-emerald-400" : "bg-red-400"}`} />
+              <div key={name} className="flex items-center gap-2.5 rounded-lg border border-border bg-surface-elevated px-3 py-2.5">
+                <span className={`h-2.5 w-2.5 rounded-full ${up ? "bg-status-healthy" : "bg-status-critical"}`} />
                 <div>
-                  <div className="text-sm text-white/80">{COMPONENT_LABEL[name] ?? name}</div>
-                  <div className={`text-xs ${up ? "text-emerald-300/70" : "text-red-300/70"}`}>{up ? "reachable" : "unreachable"}</div>
+                  <div className="text-sm text-text-secondary">{COMPONENT_LABEL[name] ?? name}</div>
+                  <div className={`text-xs ${up ? "text-status-healthy/70" : "text-status-critical/70"}`}>{up ? "reachable" : "unreachable"}</div>
                 </div>
               </div>
             ))}
-            {!h && <div className="text-sm text-white/40">Loading...</div>}
+            {!h && <div className="text-sm text-text-muted">Loading...</div>}
           </div>
         </Card>
       </div>

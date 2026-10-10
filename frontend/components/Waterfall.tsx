@@ -22,11 +22,11 @@ function depthMap(spans: Span[]): Record<string, number> {
 function Ruler({ total }: { total: number }) {
   const ticks = [0, 0.25, 0.5, 0.75, 1];
   return (
-    <div className="relative mb-2 h-4 border-b border-white/10">
+    <div className="relative mb-2 h-4 border-b border-border">
       {ticks.map((t) => (
         <span
           key={t}
-          className="absolute -translate-x-1/2 text-[11px] tabular-nums text-white/35"
+          className="absolute -translate-x-1/2 text-[11px] tabular-nums text-text-muted"
           style={{ left: `${t * 100}%` }}
         >
           {(total * t).toFixed(0)}ms
@@ -74,9 +74,9 @@ export default function Waterfall({ detail }: { detail: TraceDetail }) {
               onClick={() => toggle(s.SpanId)}
               className={`cursor-pointer rounded-lg px-2 py-2 transition-colors ${
                 isError
-                  ? "bg-red-500/[0.07] hover:bg-red-500/[0.12]"
-                  : "hover:bg-white/[0.05]"
-              } ${isOpen ? "ring-1 ring-inset ring-white/15" : ""}`}
+                  ? "bg-status-critical/[0.07] hover:bg-status-critical/[0.12]"
+                  : "hover:bg-surface-elevated"
+              } ${isOpen ? "ring-1 ring-inset ring-accent" : ""}`}
             >
               <div className="flex items-center gap-4">
                 <div
@@ -85,7 +85,7 @@ export default function Waterfall({ detail }: { detail: TraceDetail }) {
                 >
                   <svg
                     viewBox="0 0 24 24"
-                    className={`mr-1 h-3 w-3 shrink-0 text-white/35 transition-transform duration-200 ${
+                    className={`mr-1 h-3 w-3 shrink-0 text-text-muted transition-transform duration-200 ${
                       isOpen ? "rotate-90" : ""
                     }`}
                     fill="none"
@@ -98,25 +98,25 @@ export default function Waterfall({ detail }: { detail: TraceDetail }) {
                     className="mr-2 inline-block h-2.5 w-2.5 shrink-0 rounded-full"
                     style={{ background: colorFor(s.ServiceName) }}
                   />
-                  <span className="truncate font-medium text-white/90">
+                  <span className="truncate font-medium text-text-secondary">
                     {s.SpanName}
                   </span>
                 </div>
 
-                <div className="relative h-7 flex-1 rounded bg-white/[0.05]">
+                <div className="relative h-7 flex-1 rounded bg-surface-elevated">
                   <div
                     className={`absolute top-0 flex h-7 items-center rounded px-2 transition-all ${
-                      isError ? "bg-red-400/75" : "bg-sky-400/65"
+                      isError ? "bg-status-critical/75" : "bg-status-info/65"
                     }`}
                     style={{ left: `${left}%`, width: `${width}%` }}
                   >
-                    <span className="truncate text-[11px] font-medium text-black/70">
+                    <span className="truncate text-[11px] font-medium text-text-secondary">
                       {s.duration_ms.toFixed(1)}
                     </span>
                   </div>
                 </div>
 
-                <div className="w-24 shrink-0 text-right tabular-nums text-white/60">
+                <div className="w-24 shrink-0 text-right tabular-nums text-text-secondary">
                   {s.duration_ms.toFixed(2)} ms
                 </div>
               </div>
@@ -129,24 +129,24 @@ export default function Waterfall({ detail }: { detail: TraceDetail }) {
               >
                 <div className="overflow-hidden">
                   <div
-                    className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-white/40"
+                    className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-text-muted"
                     style={{ paddingLeft: depths[s.SpanId] * 18 + 34 }}
                   >
-                    <span className="text-white/55">{s.ServiceName}</span>
+                    <span className="text-text-muted">{s.ServiceName}</span>
                     <span>{s.SpanKind}</span>
-                    <span className="font-mono text-white/35">
+                    <span className="font-mono text-text-muted">
                       span={s.SpanId.slice(0, 12)}
                     </span>
                     {isError && s.StatusMessage && (
-                      <span className="text-red-300">{s.StatusMessage}</span>
+                      <span className="text-status-critical">{s.StatusMessage}</span>
                     )}
                     {attrs.map(([k, v]) => (
                       <span key={k}>
-                        {k}=<span className="text-white/60">{v}</span>
+                        {k}=<span className="text-text-secondary">{v}</span>
                       </span>
                     ))}
                     {attrs.length === 0 && !s.StatusMessage && (
-                      <span className="text-white/25">no attributes</span>
+                      <span className="text-text-muted">no attributes</span>
                     )}
                   </div>
                 </div>

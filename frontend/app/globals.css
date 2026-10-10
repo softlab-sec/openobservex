@@ -1,11 +1,174 @@
 @import "tailwindcss";
 
-:root {
-  color-scheme: dark;
+/*
+  OpenObserveX design system
+  Light enterprise theme is the DEFAULT. Dark slate theme applies
+  automatically when the OS/browser is in dark mode, and can be forced
+  either way with data-theme="light" / data-theme="dark" on <html>.
+
+  Principle: neutral by default -> indigo for interaction ->
+  status colors only when state carries meaning.
+*/
+
+@theme {
+  /* surfaces */
+  --color-surface-page: #F5F7FB;
+  --color-surface-card: #FFFFFF;
+  --color-surface-elevated: #F8FAFC;
+  --color-surface-hover: #EEF2FF;
+
+  /* borders */
+  --color-border: #D8E0EA;
+  --color-border-subtle: #E8EDF3;
+
+  /* interaction (indigo) */
+  --color-accent: #4F46E5;
+  --color-accent-hover: #4338CA;
+  --color-accent-subtle: #EEF2FF;
+  --color-accent-fg: #FFFFFF;
+
+  /* status */
+  --color-status-healthy: #15803D;
+  --color-status-warning: #B45309;
+  --color-status-critical: #DC2626;
+  --color-status-info: #1D4ED8;
+  --color-status-neutral: #475569;
+
+  /* text */
+  --color-text-primary: #0F172A;
+  --color-text-secondary: #334155;
+  --color-text-muted: #475569;
+  --color-text-disabled: #94A3B8;
+
+  /* chart series - distinct hues, CVD-validated for the light surface */
+  --color-data-1: #3366CC;
+  --color-data-2: #E8663C;
+  --color-data-3: #0E9AA0;
+  --color-data-4: #8B5CF6;
+  --color-data-5: #DB2777;
+  --color-data-6: #A16207;
+  --color-data-7: #2E8B57;
+  /* single-series data signature */
+  --color-data-teal: #0E9AA0;
+}
+
+/* ---- Dark theme values ---- */
+/* Applied when the OS prefers dark and the user has not forced light. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-surface-page: #0B1220;
+    --color-surface-card: #111827;
+    --color-surface-elevated: #1A2234;
+    --color-surface-hover: #1F2937;
+
+    --color-border: #2A3444;
+    --color-border-subtle: #1E2635;
+
+    --color-accent: #6366F1;
+    --color-accent-hover: #818CF8;
+    --color-accent-subtle: #2A2550;
+    --color-accent-fg: #FFFFFF;
+
+    --color-status-healthy: #22C55E;
+    --color-status-warning: #F59E0B;
+    --color-status-critical: #EF4444;
+    --color-status-info: #3B82F6;
+    --color-status-neutral: #94A3B8;
+
+    --color-text-primary: #F1F5F9;
+    --color-text-secondary: #94A3B8;
+    --color-text-muted: #64748B;
+    --color-text-disabled: #475569;
+
+    --color-data-1: #4A82E6;
+    --color-data-2: #DF6E3A;
+    --color-data-3: #17A8A0;
+    --color-data-4: #9579EC;
+    --color-data-5: #DB5E97;
+    --color-data-6: #B5872E;
+    --color-data-7: #25A978;
+    --color-data-teal: #17A8A0;
+  }
+}
+
+/* Explicit dark override (data-theme="dark") regardless of OS setting. */
+:root[data-theme="dark"] {
+  --color-surface-page: #0B1220;
+  --color-surface-card: #111827;
+  --color-surface-elevated: #1A2234;
+  --color-surface-hover: #1F2937;
+
+  --color-border: #2A3444;
+  --color-border-subtle: #1E2635;
+
+  --color-accent: #6366F1;
+  --color-accent-hover: #818CF8;
+  --color-accent-subtle: #2A2550;
+  --color-accent-fg: #FFFFFF;
+
+  --color-status-healthy: #22C55E;
+  --color-status-warning: #F59E0B;
+  --color-status-critical: #EF4444;
+  --color-status-info: #3B82F6;
+  --color-status-neutral: #94A3B8;
+
+  --color-text-primary: #F1F5F9;
+  --color-text-secondary: #94A3B8;
+  --color-text-muted: #64748B;
+  --color-text-disabled: #475569;
+
+  --color-data-1: #4A82E6;
+  --color-data-2: #DF6E3A;
+  --color-data-3: #17A8A0;
+  --color-data-4: #9579EC;
+  --color-data-5: #DB5E97;
+  --color-data-6: #B5872E;
+  --color-data-7: #25A978;
+  --color-data-teal: #17A8A0;
+}
+
+html,
+body {
+  background-color: var(--color-surface-page);
+  color: var(--color-text-primary);
 }
 
 body {
-  background: #0b0f17;
-  color: #e6edf3;
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Restrained elevation. No glow, no gradient. A card is a white panel that
+   sits above the canvas on a hairline border plus a soft, low shadow. */
+.card-elev {
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 1px 3px rgba(15, 23, 42, 0.06);
+}
+
+:root[data-theme="dark"] .card-elev,
+.card-elev {
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .card-elev {
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.30),
+      0 1px 3px rgba(0, 0, 0, 0.40);
+  }
+}
+
+:root[data-theme="dark"] .card-elev {
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.30),
+    0 1px 3px rgba(0, 0, 0, 0.40);
+}
+
+/* Legacy glow utilities retired. Kept as inert no-ops so any lingering
+   references degrade gracefully until they are swept out of the markup. */
+.glow-accent,
+.glow-teal,
+.hero-glow {
+  box-shadow: none;
+  background-image: none;
 }

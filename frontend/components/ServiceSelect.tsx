@@ -45,35 +45,35 @@ export default function ServiceSelect({
 
   const trigger =
     className ??
-    "w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none focus:border-white/40 flex items-center justify-between";
+    "w-full rounded-lg border border-border bg-surface-elevated px-3 py-2 text-sm outline-none focus:border-border flex items-center justify-between";
 
   return (
     <div className="relative" ref={boxRef}>
       <button type="button" className={trigger} onClick={() => setOpen((v) => !v)}>
-        <span className={value ? "text-white" : "text-white/40"}>
+        <span className={value ? "text-text-primary" : "text-text-muted"}>
           {value ?? "All services"}
         </span>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-white/40">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-text-muted">
           <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
 
       {open && (
-        <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-lg border border-white/15 bg-[#0d1117] shadow-xl">
-          <div className="border-b border-white/10 p-2">
+        <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-lg border border-border bg-[#0d1117] shadow-xl">
+          <div className="border-b border-border p-2">
             <input
               autoFocus
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search services..."
-              className="w-full rounded-md border border-white/10 bg-black/40 px-2.5 py-1.5 text-sm outline-none focus:border-white/40"
+              className="w-full rounded-md border border-border bg-surface-elevated px-2.5 py-1.5 text-sm outline-none focus:border-border"
             />
           </div>
           <div className="max-h-56 overflow-y-auto py-1">
             <button
               type="button"
               onClick={() => { onChange(null); setOpen(false); setQuery(""); }}
-              className={`flex w-full items-center px-3 py-2 text-left text-sm hover:bg-white/[0.06] ${value === null ? "text-sky-300" : "text-white/70"}`}
+              className={`flex w-full items-center px-3 py-2 text-left text-sm hover:bg-surface-elevated ${value === null ? "text-accent" : "text-text-secondary"}`}
             >
               All services
             </button>
@@ -84,17 +84,17 @@ export default function ServiceSelect({
                   type="button"
                   key={s.ServiceName}
                   onClick={() => { onChange(s.ServiceName); setOpen(false); setQuery(""); }}
-                  className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-white/[0.06] ${value === s.ServiceName ? "text-sky-300" : "text-white/80"}`}
+                  className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-surface-elevated ${value === s.ServiceName ? "text-accent" : "text-text-secondary"}`}
                 >
                   <span className="flex items-center gap-2">
-                    <span className={`h-1.5 w-1.5 rounded-full ${bad ? "bg-red-400" : "bg-emerald-400"}`} />
+                    <span className={`h-1.5 w-1.5 rounded-full ${bad ? "bg-status-critical" : "bg-status-healthy"}`} />
                     {s.ServiceName}
                   </span>
                 </button>
               );
             })}
             {filtered.length === 0 && (
-              <div className="px-3 py-2 text-sm text-white/40">
+              <div className="px-3 py-2 text-sm text-text-muted">
                 {services.length === 0 ? "No services discovered yet" : "No match"}
               </div>
             )}

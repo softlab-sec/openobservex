@@ -49,10 +49,10 @@ export default function PasswordField({
 
   const meter =
     score <= 2
-      ? { w: "33%", cls: "bg-red-500", label: "Weak" }
+      ? { w: "33%", cls: "bg-status-critical", label: "Weak" }
       : score <= 4
-        ? { w: "66%", cls: "bg-amber-500", label: "Fair" }
-        : { w: "100%", cls: "bg-emerald-500", label: "Strong" };
+        ? { w: "66%", cls: "bg-status-warning", label: "Fair" }
+        : { w: "100%", cls: "bg-status-healthy", label: "Strong" };
 
   return (
     <div>
@@ -62,12 +62,12 @@ export default function PasswordField({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 pr-16 text-sm outline-none focus:border-white/40"
+          className="w-full rounded-lg border border-border bg-surface-elevated px-3 py-2 pr-16 text-sm outline-none focus:border-border"
         />
         <button
           type="button"
           onClick={() => setShow((s) => !s)}
-          className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-white/40 transition hover:text-white/70"
+          className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-text-muted transition hover:text-text-secondary"
         >
           {show ? "Hide" : "Show"}
         </button>
@@ -75,17 +75,17 @@ export default function PasswordField({
       {showMeter && value.length > 0 && (
         <div className="mt-2 space-y-2">
           <div className="flex items-center gap-2">
-            <div className="h-1 flex-1 overflow-hidden rounded-full bg-white/10">
+            <div className="h-1 flex-1 overflow-hidden rounded-full bg-surface-hover">
               <div className={`h-full rounded-full transition-all ${meter.cls}`} style={{ width: meter.w }} />
             </div>
-            <span className="w-12 text-right text-[11px] text-white/50">{meter.label}</span>
+            <span className="w-12 text-right text-[11px] text-text-muted">{meter.label}</span>
           </div>
           <ul className="grid grid-cols-2 gap-x-4 gap-y-1">
             {RULES.map((r) => (
               <li
                 key={r.key}
                 className={`flex items-center gap-1.5 text-[11px] ${
-                  checks[r.key] ? "text-emerald-400/80" : "text-white/35"
+                  checks[r.key] ? "text-status-healthy/90" : "text-text-muted"
                 }`}
               >
                 <span className="text-[10px]">{checks[r.key] ? "✓" : "○"}</span>

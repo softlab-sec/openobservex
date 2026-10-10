@@ -61,11 +61,11 @@ function LoginForm() {
     <div className="min-h-screen flex items-center justify-center p-4">
       <form
         onSubmit={onSubmit}
-        className="w-full max-w-sm space-y-4 rounded-2xl border border-white/10 bg-white/5 p-8"
+        className="w-full max-w-sm space-y-4 rounded-2xl border border-border bg-surface-elevated p-8"
       >
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">OpenObserveX</h1>
-          <p className="mt-1 text-sm text-white/50">Sign in to your account</p>
+          <p className="mt-1 text-sm text-text-muted">Sign in to your account</p>
         </div>
         <input
           type="email"
@@ -73,7 +73,7 @@ function LoginForm() {
           placeholder="Email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 outline-none focus:border-white/40"
+          className="w-full rounded-lg border border-border bg-surface-elevated px-3 py-2 outline-none focus:border-border"
         />
         <input
           type="password"
@@ -81,45 +81,45 @@ function LoginForm() {
           placeholder="Password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 outline-none focus:border-white/40"
+          className="w-full rounded-lg border border-border bg-surface-elevated px-3 py-2 outline-none focus:border-border"
         />
         <div className="text-right">
-          <Link href="/forgot-password" className="text-xs text-white/40 transition hover:text-white/70">
+          <Link href="/forgot-password" className="text-xs text-text-muted transition hover:text-text-secondary">
             Forgot password?
           </Link>
         </div>
         {expired && !error && (
-          <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 text-sm text-amber-300">
+          <p className="rounded-lg border border-status-warning/30 bg-status-warning/10 p-2 text-sm text-status-warning">
             Your session expired. Please sign in again.
           </p>
         )}
-        {error && <p className="text-sm text-red-400">{error}</p>}
+        {error && <p className="text-sm text-status-critical">{error}</p>}
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded-lg bg-white py-2 font-medium text-black transition disabled:opacity-50"
+          className="w-full rounded-lg bg-surface-card py-2 font-medium text-text-primary transition disabled:opacity-50"
         >
           {loading ? "Signing in..." : "Sign in"}
         </button>
         {sso?.enabled && (
           <>
-            <div className="flex items-center gap-3 text-xs text-white/30">
-              <div className="h-px flex-1 bg-white/10" />
+            <div className="flex items-center gap-3 text-xs text-text-muted">
+              <div className="h-px flex-1 bg-surface-hover" />
               or
-              <div className="h-px flex-1 bg-white/10" />
+              <div className="h-px flex-1 bg-surface-hover" />
             </div>
             
               <a
               href="/api/v1/auth/oidc/login"
-              className="block w-full rounded-lg border border-white/15 bg-white/[0.03] py-2 text-center font-medium text-white/80 transition hover:bg-white/[0.08]"
+              className="block w-full rounded-lg border border-border bg-surface-elevated py-2 text-center font-medium text-text-secondary transition hover:bg-surface-elevated"
             >
               Sign in with {sso.provider_name}
             </a>
           </>
         )}
-        <p className="text-center text-sm text-white/50">
+        <p className="text-center text-sm text-text-muted">
           No account?{" "}
-          <Link href="/register" className="text-sky-400 hover:underline">
+          <Link href="/register" className="text-status-info hover:underline">
             Create one
           </Link>
         </p>

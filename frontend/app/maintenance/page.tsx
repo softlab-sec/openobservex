@@ -69,20 +69,20 @@ export default function MaintenancePage() {
   return (
     <Shell title="Maintenance Windows">
       <div className="mb-2">
-        <h1 className="text-xl font-semibold text-white">Maintenance Windows</h1>
-        <p className="text-sm text-white/50">
+        <h1 className="text-xl font-semibold text-text-primary">Maintenance Windows</h1>
+        <p className="text-sm text-text-muted">
           Suppress alert firing during planned work. While a window is active, matching rules are evaluated but do not create incidents.
         </p>
       </div>
 
       {err && (
-        <p className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{err}</p>
+        <p className="mb-4 rounded-lg border border-status-critical/30 bg-status-critical/10 p-3 text-sm text-status-critical">{err}</p>
       )}
 
       {activeCount > 0 && (
-        <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber-500/25 bg-amber-500/[0.06] px-4 py-2.5 text-sm">
-          <span className="h-2 w-2 rounded-full bg-amber-400" />
-          <span className="text-amber-200">
+        <div className="mb-4 flex items-center gap-2 rounded-lg border border-status-warning/25 bg-status-warning/[0.06] px-4 py-2.5 text-sm">
+          <span className="h-2 w-2 rounded-full bg-status-warning" />
+          <span className="text-status-warning">
             {activeCount} active window{activeCount > 1 ? "s" : ""}: alert firing is currently suppressed for the affected scope.
           </span>
         </div>
@@ -91,39 +91,39 @@ export default function MaintenancePage() {
       <Card title="Schedule a Window">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="text-sm">
-            <span className="mb-1 block text-white/60">Reason</span>
+            <span className="mb-1 block text-text-secondary">Reason</span>
             <input
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="e.g. checkout-service deploy"
-              className="w-full rounded-lg border border-white/15 bg-white/[0.03] px-3 py-2 text-white placeholder:text-white/30 focus:border-sky-400/50 focus:outline-none"
+              className="w-full rounded-lg border border-border bg-surface-elevated px-3 py-2 text-text-primary placeholder:text-text-muted focus:border-status-info/50 focus:outline-none"
             />
           </label>
           <label className="text-sm">
-            <span className="mb-1 block text-white/60">Service (blank = all services)</span>
+            <span className="mb-1 block text-text-secondary">Service (blank = all services)</span>
             <input
               value={service}
               onChange={(e) => setService(e.target.value)}
               placeholder="leave blank for org-wide"
-              className="w-full rounded-lg border border-white/15 bg-white/[0.03] px-3 py-2 text-white placeholder:text-white/30 focus:border-sky-400/50 focus:outline-none"
+              className="w-full rounded-lg border border-border bg-surface-elevated px-3 py-2 text-text-primary placeholder:text-text-muted focus:border-status-info/50 focus:outline-none"
             />
           </label>
           <label className="text-sm">
-            <span className="mb-1 block text-white/60">Starts</span>
+            <span className="mb-1 block text-text-secondary">Starts</span>
             <input
               type="datetime-local"
               value={startsAt}
               onChange={(e) => setStartsAt(e.target.value)}
-              className="w-full rounded-lg border border-white/15 bg-white/[0.03] px-3 py-2 text-white focus:border-sky-400/50 focus:outline-none"
+              className="w-full rounded-lg border border-border bg-surface-elevated px-3 py-2 text-text-primary focus:border-status-info/50 focus:outline-none"
             />
           </label>
           <label className="text-sm">
-            <span className="mb-1 block text-white/60">Ends</span>
+            <span className="mb-1 block text-text-secondary">Ends</span>
             <input
               type="datetime-local"
               value={endsAt}
               onChange={(e) => setEndsAt(e.target.value)}
-              className="w-full rounded-lg border border-white/15 bg-white/[0.03] px-3 py-2 text-white focus:border-sky-400/50 focus:outline-none"
+              className="w-full rounded-lg border border-border bg-surface-elevated px-3 py-2 text-text-primary focus:border-status-info/50 focus:outline-none"
             />
           </label>
         </div>
@@ -132,7 +132,7 @@ export default function MaintenancePage() {
           <button
             onClick={create}
             disabled={busy}
-            className="rounded-lg bg-sky-500/90 px-4 py-2 text-sm font-medium text-white transition hover:bg-sky-500 disabled:opacity-50"
+            className="rounded-lg bg-status-info/90 px-4 py-2 text-sm font-medium text-text-primary transition hover:bg-status-info disabled:opacity-50"
           >
             {busy ? "Scheduling..." : "Schedule Window"}
           </button>
@@ -143,12 +143,12 @@ export default function MaintenancePage() {
       <div className="mt-6">
         <Card title="Scheduled Windows">
           {windows.length === 0 ? (
-            <p className="text-sm text-white/40">No maintenance windows scheduled.</p>
+            <p className="text-sm text-text-muted">No maintenance windows scheduled.</p>
           ) : (
-            <div className="overflow-hidden rounded-lg border border-white/10">
+            <div className="overflow-hidden rounded-lg border border-border">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-white/[0.04] text-left text-white/50">
+                  <tr className="bg-surface-elevated text-left text-text-muted">
                     <th className="px-4 py-2 font-medium">Reason</th>
                     <th className="px-4 py-2 font-medium">Scope</th>
                     <th className="px-4 py-2 font-medium">Window</th>
@@ -158,28 +158,28 @@ export default function MaintenancePage() {
                 </thead>
                 <tbody>
                   {windows.map((w) => (
-                    <tr key={w.id} className="border-t border-white/5">
-                      <td className="px-4 py-2.5 text-white/80">{w.reason}</td>
-                      <td className="px-4 py-2.5 text-white/70">
-                        {w.service ? w.service : <span className="text-white/40">All services</span>}
+                    <tr key={w.id} className="border-t border-border">
+                      <td className="px-4 py-2.5 text-text-secondary">{w.reason}</td>
+                      <td className="px-4 py-2.5 text-text-secondary">
+                        {w.service ? w.service : <span className="text-text-muted">All services</span>}
                       </td>
-                      <td className="px-4 py-2.5 tabular-nums text-white/70">{fmt(w.starts_at)} to {fmt(w.ends_at)}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-text-secondary">{fmt(w.starts_at)} to {fmt(w.ends_at)}</td>
                       <td className="px-4 py-2.5">
                         {w.active ? (
-                          <span className="inline-flex items-center gap-1.5 text-xs text-amber-300">
-                            <span className="h-1.5 w-1.5 rounded-full bg-amber-400" /> active
+                          <span className="inline-flex items-center gap-1.5 text-xs text-status-warning">
+                            <span className="h-1.5 w-1.5 rounded-full bg-status-warning" /> active
                           </span>
                         ) : new Date(w.ends_at) < new Date() ? (
-                          <span className="text-xs text-white/40">ended</span>
+                          <span className="text-xs text-text-muted">ended</span>
                         ) : (
-                          <span className="text-xs text-sky-300/80">scheduled</span>
+                          <span className="text-xs text-status-info/80">scheduled</span>
                         )}
                       </td>
                       <td className="px-4 py-2.5 text-right">
 {canManage(role) && (
                         <button
                           onClick={() => remove(w.id)}
-                          className="rounded-md border border-white/15 px-2.5 py-1 text-xs text-white/70 transition hover:border-red-400/40 hover:text-red-300"
+                          className="rounded-md border border-border px-2.5 py-1 text-xs text-text-secondary transition hover:border-status-critical/40 hover:text-status-critical"
                         >
                           Delete
                         </button>

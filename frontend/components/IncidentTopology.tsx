@@ -30,9 +30,9 @@ type NData = {
 };
 
 const HEALTH = {
-  failing: { ring: "#f87171", glow: "rgba(248,113,113,0.55)", text: "text-red-300" },
-  degraded: { ring: "#fbbf24", glow: "rgba(251,191,36,0.4)", text: "text-amber-300" },
-  healthy: { ring: "#34d399", glow: "rgba(52,211,153,0.35)", text: "text-emerald-300" },
+  failing: { ring: "var(--color-status-critical)", glow: "rgba(248,113,113,0.55)", text: "text-status-critical" },
+  degraded: { ring: "var(--color-status-warning)", glow: "rgba(251,191,36,0.4)", text: "text-status-warning" },
+  healthy: { ring: "var(--color-status-healthy)", glow: "rgba(52,211,153,0.35)", text: "text-status-healthy" },
 };
 const HEALTH_LABEL = { failing: "Failing", degraded: "Degraded", healthy: "Healthy" };
 
@@ -64,49 +64,49 @@ function CircleNode({ data }: { data: NData }) {
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
-      <Handle type="target" position={Position.Left} className="!h-1.5 !w-1.5 !min-w-0 !border-0 !bg-white/40" style={{ left: -2 }} />
+      <Handle type="target" position={Position.Left} className="!h-1.5 !w-1.5 !min-w-0 !border-0 !bg-surface-hover" style={{ left: -2 }} />
       <div
         className="flex items-center justify-center rounded-full transition"
         style={{
           width: dia,
           height: dia,
-          background: "#0f1622",
+          background: "#FFFFFF",
           border: `${isFocus ? 4 : 3}px solid ${h.ring}`,
           boxShadow: `0 0 ${isFocus ? 28 : 15}px -4px ${h.glow}${isFocus ? ", 0 0 0 4px rgba(56,189,248,0.25)" : ""}`,
         }}
       >
-        <span className="text-sm font-bold text-white">
-          {data.errorPct > 0 ? `${data.errorPct}%` : ""}
+        <span className="text-sm font-bold text-text-primary">
+          {data.errorPct > 0 ? `${data.errorPct}%` : `${data.p95}ms`}
         </span>
       </div>
       <div className="absolute left-1/2 top-full mt-1.5 w-[170px] -translate-x-1/2 text-center pointer-events-none">
-        <div className="truncate text-[15px] font-bold text-white">{data.label}</div>
-        <div className={`text-[13px] font-medium ${data.errorPct > 0 ? h.text : "text-white/55"}`}>
+        <div className="truncate text-[15px] font-bold text-text-primary">{data.label}</div>
+        <div className={`text-[13px] font-medium ${data.errorPct > 0 ? h.text : "text-text-muted"}`}>
           {data.calls.toLocaleString()} calls · p95 {data.p95}ms
         </div>
       </div>
-      <Handle type="source" position={Position.Right} className="!h-1.5 !w-1.5 !min-w-0 !border-0 !bg-white/40" style={{ right: -2 }} />
+      <Handle type="source" position={Position.Right} className="!h-1.5 !w-1.5 !min-w-0 !border-0 !bg-surface-hover" style={{ right: -2 }} />
 
       <NodeToolbar isVisible={hover} position={data.flipUp ? Position.Top : Position.Bottom} offset={12}>
-        <div className="w-72 rounded-xl border border-white/20 bg-[#0b0f17] p-4 text-left shadow-2xl">
+        <div className="w-72 rounded-xl border border-border bg-surface-card p-4 text-left shadow-2xl">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <span className="truncate text-base font-bold text-white">{data.label}</span>
+            <span className="truncate text-base font-bold text-text-primary">{data.label}</span>
             <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${
-              data.health === "failing" ? "bg-red-500/15 text-red-300"
-              : data.health === "degraded" ? "bg-amber-500/15 text-amber-300"
-              : "bg-emerald-500/15 text-emerald-300"}`}>
+              data.health === "failing" ? "bg-status-critical/15 text-status-critical"
+              : data.health === "degraded" ? "bg-status-warning/15 text-status-warning"
+              : "bg-status-healthy/15 text-status-healthy"}`}>
               {HEALTH_LABEL[data.health]}
             </span>
           </div>
-          {roleLabel && <div className="mb-2 text-[10px] uppercase tracking-wide text-white/35">{roleLabel}</div>}
+          {roleLabel && <div className="mb-2 text-[10px] uppercase tracking-wide text-text-muted">{roleLabel}</div>}
           <div className="space-y-1.5 text-sm">
-            <div className="flex justify-between"><span className="text-white/40">Error rate</span><span className={data.errorPct > 0 ? h.text : "text-white/70"}>{data.errorPct}%</span></div>
-            <div className="flex justify-between"><span className="text-white/40">Latency</span><span className="text-white/70">{data.p95}ms</span></div>
-            <div className="flex justify-between"><span className="text-white/40">Throughput</span><span className="text-white/70">{data.rps} req/s</span></div>
-            <div className="flex justify-between"><span className="text-white/40">Calls ({data.windowMin}m)</span><span className="text-white/70">{data.calls.toLocaleString()}</span></div>
-            <div className="flex justify-between"><span className="text-white/40">Active alerts</span><span className="text-white/40">—</span></div>
+            <div className="flex justify-between"><span className="text-text-muted">Error rate</span><span className={data.errorPct > 0 ? h.text : "text-text-secondary"}>{data.errorPct}%</span></div>
+            <div className="flex justify-between"><span className="text-text-muted">Latency</span><span className="text-text-secondary">{data.p95}ms</span></div>
+            <div className="flex justify-between"><span className="text-text-muted">Throughput</span><span className="text-text-secondary">{data.rps} req/s</span></div>
+            <div className="flex justify-between"><span className="text-text-muted">Calls ({data.windowMin}m)</span><span className="text-text-secondary">{data.calls.toLocaleString()}</span></div>
+            <div className="flex justify-between"><span className="text-text-muted">Active alerts</span><span className="text-text-muted">—</span></div>
           </div>
-          <div className="mt-3 border-t border-white/10 pt-2.5 text-sm leading-relaxed text-white/70">
+          <div className="mt-3 border-t border-border pt-2.5 text-sm leading-relaxed text-text-secondary">
             {summarize(data)}
           </div>
         </div>
@@ -145,11 +145,11 @@ function TopologyGraph({ service, minutes }: { service: string; minutes: number 
     apiGet<ServiceMap>(`/api/v1/stats/service-map?minutes=${minutes}`)
       .then((data) => {
         if (!data.nodes.length) return;
-        const down: Record<string, string[]> = {};
+        const down: Record<string, string[]> = {}; const out: Record<string, number> = {}; const outP95: Record<string, number> = {};
         const up: Record<string, string[]> = {};
         data.edges.forEach((e) => {
           (down[e.source] ??= []).push(e.target);
-          (up[e.target] ??= []).push(e.source);
+          (up[e.target] ??= []).push(e.source); out[e.source] = (out[e.source] ?? 0) + e.calls; outP95[e.source] = Math.max(outP95[e.source] ?? 0, e.p95_ms ?? 0);
         });
         const upstream = new Set<string>();
         const downstream = new Set<string>();
@@ -181,9 +181,9 @@ function TopologyGraph({ service, minutes }: { service: string; minutes: number 
             data: {
               label: id,
               health: nd.health,
-              calls: nd.calls,
+              calls: nd.calls || out[id] || 0,
               errorPct: nd.error_pct,
-              p95: nd.p95_ms,
+              p95: nd.p95_ms || outP95[id] || 0,
               role,
               rps: Math.round((nd.calls / (minutes * 60)) * 10) / 10,
               windowMin: minutes,
@@ -198,7 +198,7 @@ function TopologyGraph({ service, minutes }: { service: string; minutes: number 
             const ep = e.error_pct ?? 0;
             const failing = ep >= 5;
             const degraded = ep >= 1 && ep < 5;
-            const stroke = failing ? "#f87171" : degraded ? "#fbbf24" : "#38bdf8";
+            const stroke = failing ? "var(--color-status-critical)" : degraded ? "var(--color-status-warning)" : "var(--color-accent)";
             return {
               id: `e${i}`,
               source: e.source,
@@ -206,8 +206,8 @@ function TopologyGraph({ service, minutes }: { service: string; minutes: number 
               animated: failing,
               type: "default",
               label: `${e.calls.toLocaleString()} calls${ep > 0 ? ` · ${ep}% err` : ""}`,
-              labelStyle: { fill: "#ffffff90", fontSize: 11 },
-              labelBgStyle: { fill: "#0b0f17", fillOpacity: 0.9 },
+              labelStyle: { fill: "var(--color-text-secondary)", fontSize: 11 },
+              labelBgStyle: { fill: "var(--color-surface-card)", fillOpacity: 0.9 },
               labelBgPadding: [4, 2] as [number, number],
               labelBgBorderRadius: 4,
               markerEnd: { type: MarkerType.ArrowClosed, color: stroke, width: 22, height: 22 },
@@ -240,7 +240,7 @@ function TopologyGraph({ service, minutes }: { service: string; minutes: number 
       zoomOnScroll
     >
       <Background color="#ffffff10" gap={22} />
-      <Controls className="!bg-black/70 !border-white/20 [&_button]:!bg-black/60 [&_button]:!border-white/15 [&_button:hover]:!bg-white/10 [&_button]:!fill-white/80" showInteractive={false} />
+      <Controls className="!bg-surface-elevated !border-border [&_button]:!bg-surface-elevated [&_button]:!border-border [&_button:hover]:!bg-surface-hover [&_button]:!fill-text-secondary" showInteractive={false} />
     </ReactFlow>
   );
 }
@@ -261,31 +261,31 @@ export default function IncidentTopology({
 
   if (!service)
     return (
-      <p className="text-sm text-white/40">
+      <p className="text-sm text-text-muted">
         This incident has no single affected service to map.
       </p>
     );
 
   const legend = (
-    <div className="flex items-center gap-4 text-[11px] text-white/45">
-      <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-400" />healthy</span>
-      <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-amber-400" />degraded</span>
-      <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-red-400" />failing</span>
-      <span className="text-white/30">· arrows show request flow (caller → dependency)</span>
+    <div className="flex items-center gap-4 text-[11px] text-text-muted">
+      <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-status-healthy" />healthy</span>
+      <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-status-warning" />degraded</span>
+      <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-status-critical" />failing</span>
+      <span className="text-text-muted">· arrows show request flow (caller → dependency)</span>
     </div>
   );
 
   if (expanded) {
     return (
-      <div className="fixed inset-0 z-[100] flex flex-col bg-[#0b0f17]">
-        <div className="flex items-center justify-between border-b border-white/10 px-5 py-3">
+      <div className="fixed inset-0 z-[100] flex flex-col bg-surface-card">
+        <div className="flex items-center justify-between border-b border-border px-5 py-3">
           <div>
-            <div className="text-sm font-semibold text-white/90">Service dependency impact — {service}</div>
+            <div className="text-sm font-semibold text-text-secondary">Service dependency impact — {service}</div>
             {legend}
           </div>
           <button
             onClick={() => setExpanded(false)}
-            className="rounded-lg border border-white/15 px-3 py-1.5 text-sm text-white/70 transition hover:bg-white/[0.08]"
+            className="rounded-lg border border-border px-3 py-1.5 text-sm text-text-secondary transition hover:bg-surface-elevated"
           >
             ✕ Close
           </button>
@@ -301,13 +301,13 @@ export default function IncidentTopology({
         {legend}
         <button
           onClick={() => setExpanded(true)}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 px-2.5 py-1 text-xs text-white/60 transition hover:bg-white/[0.08]"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-xs text-text-secondary transition hover:bg-surface-elevated"
           title="Expand to fullscreen"
         >
           ⛶ Expand
         </button>
       </div>
-      <div style={{ height: 480 }} className="rounded-lg border border-white/[0.06] bg-[#0b0f17]">
+      <div style={{ height: 480 }} className="rounded-lg border border-border bg-surface-card">
         {graph}
       </div>
     </div>
