@@ -19,6 +19,7 @@ from app.api.audit import router as audit_router
 from app.api.oidc import router as oidc_router
 from app.api.slo import router as slo_router
 from app.api.slo_investigation import router as slo_investigation_router
+from app.api.services import router as services_router
 from app.db.clickhouse import ch_query
 from app.db.postgres import SessionLocal
 
@@ -74,6 +75,7 @@ app.include_router(audit_router)
 app.include_router(oidc_router)
 app.include_router(slo_router)
 app.include_router(slo_investigation_router)
+app.include_router(services_router)
 
 
 @app.get("/", tags=["system"])
