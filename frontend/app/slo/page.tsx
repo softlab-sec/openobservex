@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Shell, { usePoll } from "@/components/Shell";
+import Link from "next/link";
 import Combobox from "@/components/Combobox";
 import { useRole, canOperate, canManage } from "@/lib/role";
 import {
@@ -176,7 +177,7 @@ function SloCard({
       <div className="mb-3 flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="truncate font-medium">{slo.name}</span>
+            <Link href={`/slo/${slo.id}`} className="truncate font-medium text-text-primary transition hover:text-accent hover:underline">{slo.name}</Link>
             {!slo.enabled && (
               <span className="shrink-0 rounded bg-surface-hover px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-text-muted">
                 Disabled

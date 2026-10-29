@@ -63,7 +63,7 @@ function ServiceNode({ data }: { data: NodeData }) {
         style={{
           width: dia,
           height: dia,
-          background: "#FFFFFF",
+          background: "var(--color-surface-card)",
           border: `${isFocus ? 4 : 3}px solid ${hr.ring}`,
           boxShadow: `0 0 ${isFocus ? 28 : 14}px -4px ${hr.glow}${isFocus ? ", 0 0 0 4px rgba(56,189,248,0.25)" : ""}`,
         }}

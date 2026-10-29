@@ -70,7 +70,7 @@ function CircleNode({ data }: { data: NData }) {
         style={{
           width: dia,
           height: dia,
-          background: "#FFFFFF",
+          background: "var(--color-surface-card)",
           border: `${isFocus ? 4 : 3}px solid ${h.ring}`,
           boxShadow: `0 0 ${isFocus ? 28 : 15}px -4px ${h.glow}${isFocus ? ", 0 0 0 4px rgba(56,189,248,0.25)" : ""}`,
         }}
