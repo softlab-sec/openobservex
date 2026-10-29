@@ -5,6 +5,7 @@ import Link from "next/link";
 import Shell, { usePoll } from "@/components/Shell";
 import { Card } from "@/components/ui";
 import { apiGet } from "@/lib/api";
+import IncidentTopology from "@/components/IncidentTopology";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -393,6 +394,15 @@ export default function SloInvestigationPage() {
           )}
         </div>
 
+        {slo.service && (
+          <div className="mt-6">
+            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-text-muted">
+              Service dependencies
+            </h2>
+            <IncidentTopology service={slo.service} minutes={1440} label={slo.name} />
+          </div>
+        )}
+
         {/* drill-downs */}
         {slo.service && (
           <div className="mt-6">
@@ -411,12 +421,6 @@ export default function SloInvestigationPage() {
                 className="rounded-lg border border-border bg-surface-card px-3 py-1.5 text-sm text-text-secondary transition hover:bg-surface-hover hover:text-text-primary"
               >
                 View logs
-              </Link>
-              <Link
-                href={`/map?focus=${encodeURIComponent(slo.service)}`}
-                className="rounded-lg border border-border bg-surface-card px-3 py-1.5 text-sm text-text-secondary transition hover:bg-surface-hover hover:text-text-primary"
-              >
-                Service map
               </Link>
             </div>
           </div>

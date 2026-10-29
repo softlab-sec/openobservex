@@ -137,14 +137,17 @@ function layoutDagre(rn: Node[], re: Edge[]): Node[] {
   }));
 }
 
-function TopologyGraph({ service, minutes }: { service: string; minutes: number }) {
+type Status = "loading" | "ready" | "empty" | "error";
+
+function TopologyGraph({ service, minutes, depth, onStatus }: { service: string; minutes: number; depth: number; onStatus: (s: Status) => void }) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
   const load = useCallback(() => {
-    apiGet<ServiceMap>(`/api/v1/stats/service-map?minutes=${minutes}`)
+    onStatus("loading");
+    apiGet<ServiceMap>(`/api/v1/stats/service-map?minutes=${minutes}&focus=${encodeURIComponent(service)}&depth=${depth}`)
       .then((data) => {
-        if (!data.nodes.length) return;
+        if (!data.nodes.length) { setNodes([]); setEdges([]); onStatus("empty"); return; }
         const down: Record<string, string[]> = {}; const out: Record<string, number> = {}; const outP95: Record<string, number> = {};
         const up: Record<string, string[]> = {};
         data.edges.forEach((e) => {
@@ -217,9 +220,10 @@ function TopologyGraph({ service, minutes }: { service: string; minutes: number 
 
         setNodes(layoutDagre(rn, re));
         setEdges(re);
+        onStatus("ready");
       })
-      .catch(() => {});
-  }, [service, minutes, setNodes, setEdges]);
+      .catch(() => { setNodes([]); setEdges([]); onStatus("error"); });
+  }, [service, minutes, depth, setNodes, setEdges, onStatus]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -248,21 +252,25 @@ function TopologyGraph({ service, minutes }: { service: string; minutes: number 
 export default function IncidentTopology({
   service,
   minutes = 60,
+  label,
 }: {
   service: string | null;
   minutes?: number;
+  label?: string;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [depth, setDepth] = useState(1);
+  const [status, setStatus] = useState<Status>("loading");
 
   const graph = useMemo(
-    () => (service ? <TopologyGraph service={service} minutes={minutes} /> : null),
-    [service, minutes]
+    () => (service ? <TopologyGraph service={service} minutes={minutes} depth={depth} onStatus={setStatus} /> : null),
+    [service, minutes, depth]
   );
 
   if (!service)
     return (
       <p className="text-sm text-text-muted">
-        This incident has no single affected service to map.
+        No single service is associated with this view, so there is no dependency graph to show.
       </p>
     );
 
@@ -271,44 +279,87 @@ export default function IncidentTopology({
       <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-status-healthy" />healthy</span>
       <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-status-warning" />degraded</span>
       <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-status-critical" />failing</span>
-      <span className="text-text-muted">· arrows show request flow (caller → dependency)</span>
+      <span className="text-text-muted">arrows show request flow (caller to dependency)</span>
+    </div>
+  );
+
+  const depthCtl = (
+    <div className="flex rounded-lg border border-border bg-surface-card p-0.5">
+      {[{ k: 1, t: "Direct" }, { k: 2, t: "2 hops" }, { k: 0, t: "All" }].map((o) => (
+        <button
+          key={o.k}
+          onClick={() => setDepth(o.k)}
+          className={`rounded px-2.5 py-1 text-xs font-medium transition ${depth === o.k ? "bg-accent text-accent-fg" : "text-text-secondary hover:bg-surface-hover hover:text-text-primary"}`}
+        >
+          {o.t}
+        </button>
+      ))}
+    </div>
+  );
+
+  const heading = (
+    <div className="min-w-0">
+      <div className="truncate text-sm font-semibold text-text-secondary">Dependencies for {service}</div>
+      {label && <div className="truncate text-[11px] text-text-muted">{label}</div>}
+    </div>
+  );
+
+  const overlay =
+    status === "loading" ? "Loading dependencies..."
+    : status === "error" ? "Could not load the dependency graph."
+    : status === "empty" ? `No observed dependencies for ${service} in this window.`
+    : null;
+
+  const body = (
+    <div className="relative h-full w-full">
+      {graph}
+      {overlay && (
+        <div className={`absolute inset-0 flex items-center justify-center bg-surface-card text-sm ${status === "error" ? "text-status-critical" : "text-text-muted"}`}>
+          {overlay}
+        </div>
+      )}
     </div>
   );
 
   if (expanded) {
     return (
       <div className="fixed inset-0 z-[100] flex flex-col bg-surface-card">
-        <div className="flex items-center justify-between border-b border-border px-5 py-3">
-          <div>
-            <div className="text-sm font-semibold text-text-secondary">Service dependency impact — {service}</div>
-            {legend}
+        <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
+          {heading}
+          <div className="flex items-center gap-3">
+            {depthCtl}
+            <button
+              onClick={() => setExpanded(false)}
+              className="rounded-lg border border-border px-3 py-1.5 text-sm text-text-secondary transition hover:bg-surface-elevated"
+            >
+              Close
+            </button>
           </div>
-          <button
-            onClick={() => setExpanded(false)}
-            className="rounded-lg border border-border px-3 py-1.5 text-sm text-text-secondary transition hover:bg-surface-elevated"
-          >
-            ✕ Close
-          </button>
         </div>
-        <div className="flex-1">{graph}</div>
+        <div className="px-5 py-2">{legend}</div>
+        <div className="flex-1">{body}</div>
       </div>
     );
   }
 
   return (
     <div>
-      <div className="mb-3 flex items-center justify-between">
-        {legend}
-        <button
-          onClick={() => setExpanded(true)}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-xs text-text-secondary transition hover:bg-surface-elevated"
-          title="Expand to fullscreen"
-        >
-          ⛶ Expand
-        </button>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        {heading}
+        <div className="flex items-center gap-3">
+          {depthCtl}
+          <button
+            onClick={() => setExpanded(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-xs text-text-secondary transition hover:bg-surface-elevated"
+            title="Expand to fullscreen"
+          >
+            Expand
+          </button>
+        </div>
       </div>
-      <div style={{ height: 480 }} className="rounded-lg border border-border bg-surface-card">
-        {graph}
+      <div className="mb-2">{legend}</div>
+      <div style={{ height: 480 }} className="overflow-hidden rounded-lg border border-border bg-surface-card">
+        {body}
       </div>
     </div>
   );

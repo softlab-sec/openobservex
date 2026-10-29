@@ -252,6 +252,7 @@ function ServiceMapInner() {
   const searchParams = useSearchParams();
   const focus = searchParams.get("focus");
   const fromIncident = searchParams.get("from");
+  const [depth, setDepth] = useState(1);
   const [minutes, setMinutes] = useState(60);
   const [app, setApp] = useState("all");
   const [apps, setApps] = useState<Application[]>([]);
@@ -283,7 +284,8 @@ function ServiceMapInner() {
       .catch(() => {});
 
     const appQ = app !== "all" ? `&app=${encodeURIComponent(app)}` : "";
-    return apiGet<ServiceMap>(`/api/v1/stats/service-map?minutes=${minutes}${appQ}`)
+    const focusQ = focus ? `&focus=${encodeURIComponent(focus)}&depth=${depth}` : "";
+    return apiGet<ServiceMap>(`/api/v1/stats/service-map?minutes=${minutes}${appQ}${focusQ}`)
       .then((data) => {
         setErr(null);
         if (!data.nodes.length) {
@@ -305,27 +307,6 @@ function ServiceMapInner() {
         const nodeById: Record<string, typeof data.nodes[number]> = {};
         data.nodes.forEach((n) => (nodeById[n.id] = n));
 
-        // Blast radius: walk edges up (callers = victims) and down (callees = causes)
-        // from the focused service. Fully derived from real edges, not hardcoded.
-        const inBlast = new Set<string>();
-        if (focus) {
-          inBlast.add(focus);
-          const down: Record<string, string[]> = {};
-          const up: Record<string, string[]> = {};
-          data.edges.forEach((e) => {
-            (down[e.source] ??= []).push(e.target);
-            (up[e.target] ??= []).push(e.source);
-          });
-          const walk = (start: string, adj: Record<string, string[]>) => {
-            const q = [start];
-            while (q.length) {
-              const n = q.shift()!;
-              (adj[n] ?? []).forEach((m) => { if (!inBlast.has(m)) { inBlast.add(m); q.push(m); } });
-            }
-          };
-          walk(focus, down);
-          walk(focus, up);
-        }
         const placed = layout(data.nodes.map((n) => n.id), data.edges);
         const ys = placed.map((pl) => pl.y);
         const midY = ys.length ? (Math.min(...ys) + Math.max(...ys)) / 2 : 0;
@@ -346,7 +327,7 @@ function ServiceMapInner() {
               nodeErrorPct: nodeById[p.id]?.error_pct ?? 0,
               isRoot: (nodeById[p.id]?.calls ?? 0) === 0 || !data.edges.some((ed) => ed.target === p.id),
               isFocus: focus === p.id,
-              dim: focus ? !inBlast.has(p.id) : false,
+              dim: false,
               onOpen: openService,
             },
           };
@@ -358,7 +339,7 @@ function ServiceMapInner() {
           const failing = ep >= 5;
           const degraded = ep >= 1 && ep < 5;
           const stroke = failing ? "var(--color-status-critical)" : degraded ? "var(--color-status-warning)" : "var(--color-accent)";
-          const edgeDim = focus ? !(inBlast.has(e.source) && inBlast.has(e.target)) : false;
+          const edgeDim = false;
           return {
             id: `e${i}`,
             source: e.source,
@@ -388,9 +369,18 @@ function ServiceMapInner() {
         setEdges(re);
       })
       .catch((e: Error) => setErr(e.message));
-  }, [minutes, app, openService]);
+  }, [minutes, app, depth, focus, openService]);
 
-  usePoll(load, [minutes, app], 15000);
+  usePoll(load, [minutes, app, depth], 15000);
+
+  // Clear the canvas when the scope changes so no stale nodes from the previous
+  // focus or depth linger while the new subgraph loads. Polling (same focus and
+  // depth) does not trigger this, so the steady-state refresh stays flicker-free.
+  useEffect(() => {
+    setNodes([]);
+    setEdges([]);
+    setEmpty(false);
+  }, [focus, depth, setNodes, setEdges]);
 
   const flow = useMemo(
     () => (
@@ -417,23 +407,38 @@ function ServiceMapInner() {
   return (
     <Shell>
       {focus && (
-        <div className="mb-4 flex items-center justify-between rounded-xl border border-status-critical/25 bg-status-critical/[0.06] px-4 py-3">
-          <div className="flex items-center gap-2">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-status-critical/60" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-status-critical" />
-            </span>
-            <span className="text-sm text-text-secondary">
-              Blast radius for <span className="font-semibold text-status-critical">{focus}</span>
-              <span className="text-text-muted"> · incident context</span>
-            </span>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-accent/25 bg-accent/[0.06] px-4 py-3">
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-text-secondary">
+              Dependencies for <span className="text-accent">{focus}</span>
+            </div>
+            <div className="text-xs text-text-muted">
+              Scoped to the services connected to {focus}.{fromIncident ? " Incident context." : ""}
+            </div>
           </div>
-          {fromIncident && (
-            <a href={`/incidents/${fromIncident}`}
+          <div className="flex items-center gap-3">
+            <div className="flex rounded-lg border border-border bg-surface-card p-0.5">
+              {[{ k: 1, t: "Direct" }, { k: 2, t: "2 hops" }, { k: 0, t: "All" }].map((o) => (
+                <button
+                  key={o.k}
+                  onClick={() => setDepth(o.k)}
+                  className={`rounded px-2.5 py-1 text-xs font-medium transition ${depth === o.k ? "bg-accent text-accent-fg" : "text-text-secondary hover:bg-surface-hover hover:text-text-primary"}`}
+                >
+                  {o.t}
+                </button>
+              ))}
+            </div>
+            {fromIncident && (
+              <a href={`/incidents/${fromIncident}`}
+                className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-1 text-xs text-text-secondary transition hover:bg-surface-elevated">
+                <span>←</span> Back to incident
+              </a>
+            )}
+            <a href="/map"
               className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-1 text-xs text-text-secondary transition hover:bg-surface-elevated">
-              <span>←</span> Back to incident
+              Full map
             </a>
-          )}
+          </div>
         </div>
       )}
       <div className="mb-4 flex items-center justify-between">
@@ -472,7 +477,11 @@ function ServiceMapInner() {
       >
         {empty ? (
           <div className="flex h-full items-center justify-center text-sm text-text-muted">
-            No service-to-service calls in this window
+            {focus ? `No observed dependencies for ${focus} in this window` : "No service-to-service calls in this window"}
+          </div>
+        ) : nodes.length === 0 && !err ? (
+          <div className="flex h-full items-center justify-center text-sm text-text-muted">
+            Loading the service map…
           </div>
         ) : (
           flow

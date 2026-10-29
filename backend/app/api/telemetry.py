@@ -249,12 +249,54 @@ def stats_error_share(
     return {"share": _rows(ch_query_scoped(query, {"mins": minutes}))}
 
 
+def _scoped_subgraph(nodes, edges, focus, depth):
+    """Subgraph reachable from `focus` within `depth` hops in both directions
+    (upstream callers and downstream dependencies). depth<=0 means the full
+    reachable closure, never the global graph. Safe on cycles, duplicate edges,
+    and an unknown focus (returns an empty graph). Node health and edge numbers
+    are preserved from the global graph; only membership is scoped."""
+    down_adj: dict = {}
+    up_adj: dict = {}
+    for e in edges:
+        down_adj.setdefault(e["source"], set()).add(e["target"])
+        up_adj.setdefault(e["target"], set()).add(e["source"])
+
+    node_count = len({n["id"] for n in nodes})
+    max_hops = depth if (depth and depth > 0) else node_count + 1
+
+    included = {focus}
+    frontier = {focus}
+    hops = 0
+    while frontier and hops < max_hops:
+        nxt = set()
+        for n in frontier:
+            nxt |= down_adj.get(n, set())
+            nxt |= up_adj.get(n, set())
+        nxt -= included
+        included |= nxt
+        frontier = nxt
+        hops += 1
+
+    sub_nodes = [n for n in nodes if n["id"] in included]
+    sub_edges = [e for e in edges if e["source"] in included and e["target"] in included]
+    return {"nodes": sub_nodes, "edges": sub_edges}
+
+
 @router.get("/stats/service-map")
 def stats_service_map(
     minutes: int = Query(60, ge=1, le=10080),
     app: Optional[str] = Query(None, description="service.namespace to scope to"),
+    focus: Optional[str] = Query(None, description="focal service; when set, returns only the connected subgraph"),
+    depth: int = Query(1, ge=0, le=50, description="hops from focus in each direction; 0 = full reachable closure"),
 ):
-    """Directed service dependency edges derived from parent/child spans."""
+    """Directed service dependency edges derived from parent/child spans.
+
+    Global graph by default. When `focus` is set, returns only the subgraph
+    reachable from the focal service within `depth` hops in both directions
+    (upstream callers and downstream dependencies); depth=0 returns the full
+    reachable closure. Node health and edge numbers stay the global values; the
+    scope limits membership only, never fabricating or recomputing them.
+    """
     query = """
         SELECT
             p.ServiceName                       AS source,
@@ -302,7 +344,9 @@ def stats_service_map(
             "p95_ms": p95,
             "health": health,
         })
-    return {"nodes": nodes, "edges": edges}
+    if not focus:
+        return {"nodes": nodes, "edges": edges}
+    return _scoped_subgraph(nodes, edges, focus, depth)
 
 
 @router.get("/stats/error-patterns")
