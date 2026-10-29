@@ -225,10 +225,11 @@ export default function AnomalyDetailPage({ params }: { params: Promise<{ id: st
                     <Tooltip
                       contentStyle={{ background: "#0d0d12", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 12 }}
                       labelStyle={{ color: "rgba(255,255,255,0.6)" }}
-                      formatter={(val: number, name: string) => {
+                      formatter={(val, name) => {
                         if (name === "lower" || name === "range") return [null, null];
-                        const dev = a.baseline_std ? ((val - a.baseline_mean) / a.baseline_std).toFixed(1) : "—";
-                        return [`${val}${unit} (${dev}σ from baseline)`, "observed"];
+                        const num = Number(val);
+                        const dev = a.baseline_std ? ((num - a.baseline_mean) / a.baseline_std).toFixed(1) : "—";
+                        return [`${num}${unit} (${dev}σ from baseline)`, "observed"];
                       }}
                     />
                     <Area dataKey="lower" stackId="band" stroke="none" fill="transparent" isAnimationActive={false} />

@@ -27,6 +27,7 @@ type NData = {
   role: "focus" | "upstream" | "downstream" | "other";
   rps: number;
   windowMin: number;
+  flipUp?: boolean;
 };
 
 const HEALTH = {

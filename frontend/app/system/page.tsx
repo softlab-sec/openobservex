@@ -53,7 +53,7 @@ export default function SystemHealthPage() {
   ];
 
   return (
-    <Shell title="System Health">
+    <Shell>
       <div className="mb-2 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-text-primary">System Health</h1>

@@ -272,7 +272,7 @@ type FormState = {
   target_ref: string;
   host: string;
   name: string;
-  sli_type: "availability" | "latency";
+  sli_type: Slo["sli_type"];
   target: number;
   window_days: number;
   latency_threshold_ms: number | null;

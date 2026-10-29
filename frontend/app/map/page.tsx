@@ -29,9 +29,16 @@ import {
 } from "@/lib/api";
 
 type NodeData = {
+  flipUp: boolean;
   label: string;
   calls: number;
   errorRate: number;
+  health: "healthy" | "degraded" | "failing";
+  p95_ms: number;
+  nodeErrorPct: number;
+  isRoot: boolean;
+  isFocus: boolean;
+  dim: boolean;
   onOpen: (svc: string) => void;
 };
 

@@ -384,7 +384,7 @@ export type IncidentRow = {
   kind: string;
   service: string | null;
   status: "firing" | "resolved";
-  severity: "critical" | "warning" | "info";
+  severity: "critical" | "high" | "warning" | "info";
   observed_value: number;
   threshold: number;
   summary: string;
@@ -415,7 +415,7 @@ export type AlertRule = {
   for_minutes: number;
   min_samples: number;
   enabled: boolean;
-  severity: "critical" | "warning" | "info";
+  severity: "critical" | "high" | "warning" | "info";
   webhook_urls: string | null;
   channel_ids: string | null;
   created_at: string;
@@ -502,7 +502,7 @@ export type AnomalyRow = {
   baseline_mean: number;
   baseline_std: number;
   z_score: number;
-  severity: "critical" | "warning" | "info";
+  severity: "critical" | "high" | "warning" | "info";
   status: "active" | "resolved";
   occurrences: number;
   first_seen: string;
@@ -529,12 +529,12 @@ export type AnomalyAnalysis = {
     failed_requests: number;
     user_impact: string;
     likely_cause: string;
+  };
   pattern: {
     pattern: string;
     signals: string[];
     description: string;
   };
-};
   rca: {
     likely_cause: string;
     confidence: string;
@@ -572,6 +572,7 @@ export type AnomalyEvidence = {
   triggers: AnomalyTrigger[];
   sample_traces: SampleTrace[];
   trend: AnomalyTrendPoint[];
+  analysis?: AnomalyAnalysis;
 };
 
 export type SystemStorageEntry = { rows: number | null; per_min_5m: number | null };

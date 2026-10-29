@@ -18,12 +18,12 @@ export function useRole(): string | undefined {
 }
 
 // admin-only: config/security actions (delete, manage keys/apps/channels).
-export function canManage(role?: string): boolean {
+export function canManage(role?: string | null): boolean {
   return role === "admin";
 }
 
 // admin or member: operational actions (create/edit rules, ack/resolve
 // incidents, resolve/dismiss/escalate anomalies, maintenance windows).
-export function canOperate(role?: string): boolean {
+export function canOperate(role?: string | null): boolean {
   return role === "admin" || role === "member";
 }

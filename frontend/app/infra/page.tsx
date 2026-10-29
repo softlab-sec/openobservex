@@ -132,7 +132,7 @@ export default function InfraPage() {
               <CartesianGrid stroke="var(--color-border)" />
               <XAxis dataKey="bucket" tickFormatter={hhmm} {...axis} tickLine={false} minTickGap={40} />
               <YAxis domain={[0, 100]} {...axis} tickLine={false} width={32} />
-              <Tooltip contentStyle={tip} labelFormatter={hhmm} />
+              <Tooltip contentStyle={tip} labelFormatter={(b) => hhmm(b as string)} />
               <Area type="monotone" dataKey="memory_pct" stroke="var(--color-data-1)" strokeWidth={2} fill="url(#memg)" name="Memory %" />
             </AreaChart>
           </ResponsiveContainer>
@@ -144,7 +144,7 @@ export default function InfraPage() {
               <CartesianGrid stroke="var(--color-border)" />
               <XAxis dataKey="bucket" tickFormatter={hhmm} {...axis} tickLine={false} minTickGap={40} />
               <YAxis {...axis} tickLine={false} width={32} />
-              <Tooltip contentStyle={tip} labelFormatter={hhmm} />
+              <Tooltip contentStyle={tip} labelFormatter={(b) => hhmm(b as string)} />
               <Line type="monotone" dataKey="load1" stroke="var(--color-data-4)" strokeWidth={2} dot={false} name="Load 1m" />
             </LineChart>
           </ResponsiveContainer>
@@ -158,7 +158,7 @@ export default function InfraPage() {
               <CartesianGrid stroke="var(--color-border)" vertical={false} />
               <XAxis dataKey="core" {...axis} tickLine={false} tickFormatter={(c) => `core ${c}`} />
               <YAxis domain={[0, 100]} {...axis} tickLine={false} width={32} unit="%" />
-              <Tooltip contentStyle={tip} formatter={(v: number) => [`${v}%`, "busy"]} labelFormatter={(c) => `Core ${c}`} />
+              <Tooltip contentStyle={tip} formatter={(v) => [`${v}%`, "busy"]} labelFormatter={(c) => `Core ${c}`} />
               <Bar dataKey="busy_pct" radius={[4, 4, 0, 0]}>
                 {cores.map((c) => <Cell key={c.core} fill={c.busy_pct >= 85 ? "var(--color-status-critical)" : c.busy_pct >= 70 ? "var(--color-status-warning)" : "var(--color-status-healthy)"} />)}
               </Bar>
@@ -173,7 +173,7 @@ export default function InfraPage() {
                 <Pie data={mem?.breakdown ?? []} dataKey="gb" nameKey="name" innerRadius={50} outerRadius={85} paddingAngle={2}>
                   {(mem?.breakdown ?? []).map((_, i) => <Cell key={i} fill={MEM_COLORS[i % MEM_COLORS.length]} />)}
                 </Pie>
-                <Tooltip contentStyle={tip} formatter={(v: number, n) => [`${v} GB`, n]} />
+                <Tooltip contentStyle={tip} formatter={(v, n) => [`${v} GB`, n]} />
               </PieChart>
             </ResponsiveContainer>
             <div className="flex-1 space-y-2 pl-2 text-sm">
@@ -211,7 +211,7 @@ export default function InfraPage() {
               <CartesianGrid stroke="var(--color-border)" />
               <XAxis dataKey="bucket" tickFormatter={hhmm} {...axis} tickLine={false} minTickGap={40} />
               <YAxis {...axis} tickLine={false} width={48} tickFormatter={bpsTick} />
-              <Tooltip contentStyle={tip} labelFormatter={hhmm} formatter={(v: number) => fmtBps(v)} />
+              <Tooltip contentStyle={tip} labelFormatter={(b) => hhmm(b as string)} formatter={(v) => fmtBps(Number(v))} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               <Area type="monotone" dataKey="rx_bps" stroke="var(--color-status-healthy)" strokeWidth={2} fill="url(#rxg)" name="RX" />
               <Area type="monotone" dataKey="tx_bps" stroke="var(--color-status-warning)" strokeWidth={2} fill="url(#txg)" name="TX" />
@@ -233,7 +233,7 @@ export default function InfraPage() {
               <CartesianGrid stroke="var(--color-border)" />
               <XAxis dataKey="bucket" tickFormatter={hhmm} {...axis} tickLine={false} minTickGap={40} />
               <YAxis {...axis} tickLine={false} width={48} tickFormatter={bpsTick} />
-              <Tooltip contentStyle={tip} labelFormatter={hhmm} formatter={(v: number) => fmtBps(v)} />
+              <Tooltip contentStyle={tip} labelFormatter={(b) => hhmm(b as string)} formatter={(v) => fmtBps(Number(v))} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               <Area type="monotone" dataKey="read_bps" stroke="var(--color-data-3)" strokeWidth={2} fill="url(#rdg)" name="Read" />
               <Area type="monotone" dataKey="write_bps" stroke="var(--color-data-5)" strokeWidth={2} fill="url(#wrg)" name="Write" />
@@ -249,7 +249,7 @@ export default function InfraPage() {
               <CartesianGrid stroke="var(--color-border)" horizontal={false} />
               <XAxis type="number" domain={[0, 100]} {...axis} tickLine={false} unit="%" />
               <YAxis type="category" dataKey="mount" {...axis} tickLine={false} width={110} />
-              <Tooltip contentStyle={tip} formatter={(v: number, _n, p) => [`${v}% of ${(p.payload as FsRow).size_gb}GB`, (p.payload as FsRow).mount]} />
+              <Tooltip contentStyle={tip} formatter={(v, _n, p) => [`${v}% of ${(p.payload as FsRow).size_gb}GB`, (p.payload as FsRow).mount]} />
               <Bar dataKey="used_pct" radius={[0, 4, 4, 0]}>
                 {fs.map((f) => <Cell key={f.mount} fill={f.used_pct >= 85 ? "var(--color-status-critical)" : f.used_pct >= 70 ? "var(--color-status-warning)" : "var(--color-status-healthy)"} />)}
               </Bar>

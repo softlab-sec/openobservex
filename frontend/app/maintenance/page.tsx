@@ -67,7 +67,7 @@ export default function MaintenancePage() {
   const activeCount = windows.filter((w) => w.active).length;
 
   return (
-    <Shell title="Maintenance Windows">
+    <Shell>
       <div className="mb-2">
         <h1 className="text-xl font-semibold text-text-primary">Maintenance Windows</h1>
         <p className="text-sm text-text-muted">

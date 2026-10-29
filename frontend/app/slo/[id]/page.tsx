@@ -321,7 +321,7 @@ export default function SloInvestigationPage() {
                         color: "var(--color-text-primary)",
                       }}
                       labelFormatter={(ts) => fmtWhen(new Date(Number(ts)).toISOString())}
-                      formatter={(v: number) => [`${v.toFixed(2)}%`, "SLI"]}
+                      formatter={(v) => [`${Number(v).toFixed(2)}%`, "SLI"]}
                     />
                     <Line
                       type="monotone"
