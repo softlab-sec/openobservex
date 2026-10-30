@@ -103,12 +103,30 @@ function sliTypeLabel(s: Investigation["slo"]): string {
   }
 }
 
+type ServiceMeta = {
+  name: string;
+  registered: boolean;
+  criticality: string | null;
+  sla_target_pct: number | null;
+  sla_window_days: number | null;
+  sla_metric: string | null;
+};
+
+const CRIT_LABEL: Record<string, string> = { tier1: "Tier 1", tier2: "Tier 2", tier3: "Tier 3", tier4: "Tier 4" };
+const CRIT_STYLE: Record<string, string> = {
+  tier1: "border-status-critical/40 bg-status-critical/10 text-status-critical",
+  tier2: "border-status-warning/40 bg-status-warning/10 text-status-warning",
+  tier3: "border-status-info/40 bg-status-info/10 text-status-info",
+  tier4: "border-border bg-surface-elevated text-text-muted",
+};
+
 export default function SloInvestigationPage() {
   const params = useParams();
   const id = String((params as Record<string, string>)?.id ?? "");
   const [data, setData] = useState<Investigation | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [svc, setSvc] = useState<ServiceMeta | null>(null);
 
   const load = useCallback(() => {
     if (!id) return;
@@ -117,6 +135,11 @@ export default function SloInvestigationPage() {
         setData(d);
         setErr(null);
         setLoaded(true);
+        if (d.slo.service) {
+          apiGet<ServiceMeta[]>("/api/v1/services")
+            .then((rows) => setSvc(rows.find((r) => r.name === d.slo.service && r.registered) ?? null))
+            .catch(() => {});
+        }
       })
       .catch((e) => {
         setErr(e?.message ?? "Failed to load");
@@ -193,6 +216,21 @@ export default function SloInvestigationPage() {
             <div className="mt-0.5 text-xs text-text-muted">
               {sliTypeLabel(slo)} · {slo.window_label}
             </div>
+            {svc && (svc.criticality || svc.sla_target_pct != null) && (
+              <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
+                {svc.criticality && (
+                  <span className={`inline-flex rounded-full border px-2 py-0.5 font-medium ${CRIT_STYLE[svc.criticality] ?? CRIT_STYLE.tier4}`}>
+                    {CRIT_LABEL[svc.criticality] ?? svc.criticality}
+                  </span>
+                )}
+                {svc.sla_target_pct != null && (
+                  <span className="text-text-secondary">
+                    SLA {svc.sla_target_pct}%{svc.sla_window_days ? ` / ${svc.sla_window_days}d` : ""}{svc.sla_metric ? ` ${svc.sla_metric}` : ""}
+                  </span>
+                )}
+                {slo.service && <span className="text-text-muted">owned by {slo.service}</span>}
+              </div>
+            )}
           </div>
           <span
             className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium ${
